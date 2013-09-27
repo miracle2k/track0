@@ -1,17 +1,29 @@
+import mimetypes
 import os
 from os import path
 from urllib.parse import urlparse
 
 
-def determine_filename(url):
+def determine_filename(url, http_response):
     """Determine the filename under which to store a URL.
     """
     parsed = urlparse(url)
     # TODO: Max filename: 255 byes
     # TODO: Query string
     filename = path.join(parsed.netloc, parsed.path[1:])
+
+    # If we are dealing with a trailing-slash, create an index.html file
+    # in a directory.
     if filename.endswith(path.sep):
         filename = path.join(filename, 'index.html')
+
+    # If we are dealing with a file w/o an extension, add one
+    if not path.splitext(filename)[1]:
+        mime = http_response.headers.get('content-type', '').split(';', 1)[0]
+        extension = mimetypes.guess_extension(mime, strict=False)
+        if extension:
+            filename = '{0}{1}'.format(filename, extension)
+
     return filename
 
 
@@ -38,7 +50,7 @@ class Mirror(object):
     def add(self, page):
         """Store the given page.
         """
-        rel_filename = determine_filename(page.url)
+        rel_filename = determine_filename(page.url, page)
         with self.open(rel_filename, 'w') as f:
             f.write(page.text)
 
