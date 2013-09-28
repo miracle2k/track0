@@ -41,7 +41,6 @@ class Mirror(object):
         """Open a file relative to the mirror directory.
         """
         full_filename = path.join(self.directory, filename)
-        from pdb import set_trace; set_trace()
 
         if not path.exists(path.dirname(full_filename)):
             os.makedirs(path.dirname(full_filename))
