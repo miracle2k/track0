@@ -406,8 +406,9 @@ class MyArgumentParser(argparse.ArgumentParser):
             # Set "option_strings" on our positional arguments. This makes
             # the base class sort them along with optional arguments
             # instead of moving them to the end of the list.
-            assert actions[1].dest == 'url'
-            actions[1].option_strings = ['url']
+            for a in actions:
+                if a.dest == 'url':
+                    a.option_strings = ['url']
             return argparse.HelpFormatter._format_usage(self, usage, actions, groups, prefix)
 
         def _format_actions_usage(self, actions, groups):
@@ -441,6 +442,7 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 def main(argv):
     parser = MyArgumentParser(argv[0], prefix_chars='-@')
+    parser.add_argument('-O', '--path')
     parser.add_argument(
         'url', nargs='+', metavar='url',
         help='urls to be added to the queue initially as a starting point')
@@ -460,7 +462,9 @@ def main(argv):
     namespace = parser.parse_args(argv[1:])
 
     try:
-        spider = Spider(CLIRules(namespace), mirror=Mirror('/tmp/test'))
+        output_path = normpath(abspath(namespace.path or 'tracked'))
+        mirror = Mirror(output_path)
+        spider = Spider(CLIRules(namespace), mirror=mirror)
     except RuleError as e:
         print('error: {1}: {0}'.format(*e.args))
         return
