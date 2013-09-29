@@ -2,14 +2,16 @@ import mimetypes
 import os
 from os import path
 from urllib.parse import urlparse
+from track.spider import get_content_type
 
 
 def determine_filename(url, http_response):
     """Determine the filename under which to store a URL.
     """
     parsed = urlparse(url)
-    # TODO: Max filename: 255 byes
     # TODO: Query string
+
+    # Prefix the domain to the filename
     filename = path.join(parsed.netloc, parsed.path[1:])
 
     # If we are dealing with a trailing-slash, create an index.html file
@@ -19,10 +21,14 @@ def determine_filename(url, http_response):
 
     # If we are dealing with a file w/o an extension, add one
     if not path.splitext(filename)[1]:
-        mime = http_response.headers.get('content-type', '').split(';', 1)[0]
+        mime = get_content_type(http_response)
         extension = mimetypes.guess_extension(mime, strict=False)
         if extension:
             filename = '{0}{1}'.format(filename, extension)
+
+    # No more than 255 bytes per path segment, its rare a filesystem
+    # supports more.
+    filename = '/'.join(map(lambda s: s[:255], filename.split('/')))
 
     return filename
 

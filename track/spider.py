@@ -3,6 +3,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
+from requests.exceptions import InvalidSchema, MissingSchema
 
 
 class Logger(object):
@@ -28,7 +29,7 @@ class Rules(object):
         """
         raise NotImplementedError()
 
-    def bail(self, page):
+    def stop(self, page):
         """Return ``False`` if the urls of a page should not be followed.
 
         The difference to :meth:`follow` is that this runs after
@@ -48,7 +49,7 @@ class DefaultRules(Rules):
     def save(self, url):
         return True
 
-    def bail(self, page):
+    def stop(self, page):
         return False
 
 
@@ -58,23 +59,39 @@ class URL(object):
     Knows various metadata like depth, source etc.
     """
 
-    def __init__(self, url, parent, source=None):
+    def __init__(self, url, previous=None, source=None, requisite=False):
         self.url = url
-        self.parent = parent
-        if self.parent:
-            self.depth = self.parent.depth + 1
-        else:
-            self.depth = 0
         self.source = source
+        self.requisite = requisite
+        self.set_previous(previous)
+
+    def set_previous(self, previous):
+        """Set the url that is the source for this one.
+            """
+        self.previous = previous
+        if previous:
+            self.root = previous.root
+            self.depth = previous.depth + 1
+            self.domain_depth = 0 \
+                if self.parsed.netloc != previous.parsed.netloc \
+                else previous.domain_depth + 1
+            if previous.requisite:
+                self.requisite = True
+        else:
+            self.root = self
+            self.depth = 0
+            self.domain_depth = 0
 
     @property
-    def root(self):
-        if not hasattr(self, '_root'):
+    def history(self):
+        if not hasattr(self, '_history'):
+            history = []
             page = self
-            while page.parent is not None:
-                page = page.parent
-            self._root = page
-        return self._root
+            while page is not None:
+                history.append(page)
+                page = page.previous
+            self._history = history
+        return self._history
 
     @property
     def parsed(self):
@@ -84,6 +101,12 @@ class URL(object):
 
     def __repr__(self):
         return '<URL {0}>'.format(self.url)
+
+
+def get_content_type(response):
+    """Helper that strips out things like ";encoding=utf-8".
+    """
+    return response.headers.get('content-type', '').split(';', 1)[0]
 
 
 class Spider(object):
@@ -129,7 +152,7 @@ class Spider(object):
     def add(self, url):
         """Add a new URL to be processed.
         """
-        url_obj = URL(url, parent=None, source='user')
+        url_obj = URL(url, previous=None, source='user')
         self._url_queue.appendleft(url_obj)
 
     def loop(self):
@@ -147,7 +170,11 @@ class Spider(object):
 
         # Download the URL
         self.logger.url(url)
-        page = self.download(url)
+        try:
+            page = self.download(url)
+        except (InvalidSchema, MissingSchema):
+            # Urls like xri://, mailto: and the like.
+            return
         page.url_obj = url
 
         # Save the file locally?
@@ -159,14 +186,18 @@ class Spider(object):
 
         # Run a hook that makes it possible to stop now and ignore
         # all the urls contained in this page.
-        if self.rules.bail(url):
+        if self.rules.stop(url):
             return
 
         # Add all links
-        for url in self.parse(page):
-            if url.url in self._known_urls:
-                continue
-            self._url_queue.appendleft(url)
+        content_type = get_content_type(page)
+        if content_type in ('text/html',):
+            for url in self.parse(page):
+                # TODO It is to early to check here, some urls may
+                # pass the test under different circumstances.
+                if url.url in self._known_urls:
+                    continue
+                self._url_queue.appendleft(url)
 
     def download(self, url):
         request = requests.Request('GET', url.url).prepare()
@@ -192,7 +223,12 @@ class Spider(object):
                 for url in handler(element, options, page=page):
                     # Make sure the url is absolute
                     url = urljoin(base_url, url)
-                    yield URL(url, page.url_obj)
+
+                    # Put together a url object with all the info that
+                    # we have ad that tests can use.
+                    yield URL(
+                        url, page.url_obj,
+                        requisite=options.get('inline', False))
 
 
     def _handle_tag(self, tag, opts, **kwargs):
@@ -224,7 +260,7 @@ class Spider(object):
         if not url:
             return
         rel = map(lambda s: s.lower(), tag.get('rel', []))
-        is_inline = rel == ['stylesheet'] or 'icon' in rel
+        is_inline = rel == ['stylesheet'] or 'icon' in rel   # TODO
         yield url
 
     def _handle_tag_form(self, tag, opts, **kwargs):
