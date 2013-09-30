@@ -253,7 +253,7 @@ class OperatorImpl:
 
     @classmethod
     def truth(cls, a, b=None):
-        assert b is None
+        assert not b
         return bool(a)
 
     @classmethod
