@@ -1,8 +1,7 @@
 import numbers
 import sys
-from os.path import commonprefix
+from os.path import commonprefix, normpath, abspath
 import argparse
-import types
 from track.mirror import Mirror
 from track.spider import Spider, Rules
 
