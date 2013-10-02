@@ -29,8 +29,8 @@ class Parser(object):
             # Put together a url object with all the info that
             # we have ad that tests can use.
             from .spider import URL
-            yield URL(url,
-                      requisite=opts.get('inline', False))
+            requisite = opts.pop('inline', False)
+            yield URL(url, requisite=requisite, **opts)
 
     def _get_urls(self):
         raise NotImplementedError()
@@ -98,10 +98,11 @@ class HTMLParser(Parser):
                               self._handle_tag)
 
             for element in soup.find_all(tag):
-                for url, setter in handler(element, options):
+                for url, (tag, attr) in handler(element, options):
                     if base_url:
                         url = urljoin(base_url, url)
-                    yield url, options, setter
+                    options['tag'] = '{0}.{1}'.format(tag.name, attr)
+                    yield url, options, self._attr_setter(tag, attr)
 
     def _attr_setter(self, tag, attr_name):
         def setter(new_value):
@@ -115,7 +116,7 @@ class HTMLParser(Parser):
             url = tag.get(attr)
             if not url:
                 continue
-            yield url, self._attr_setter(tag, attr)
+            yield url, (tag, attr)
 
     def _handle_tag_link(self, tag, opts, **kwargs):
         """Handle the <link> tag. There are different types:
@@ -138,7 +139,7 @@ class HTMLParser(Parser):
             return
         rel = map(lambda s: s.lower(), tag.get('rel', []))
         is_inline = rel == ['stylesheet'] or 'icon' in rel   # TODO
-        yield url, self._attr_setter(tag, 'href')
+        yield url, (tag, 'href')
 
     def _handle_tag_form(self, tag, opts, **kwargs):
         """Handle the <form> tag.
@@ -166,7 +167,7 @@ class HTMLParser(Parser):
             content = tag.get('content', '')
             match = re.match(r'url=(.*)', content, re.IGNORECASE)
             if match:
-                yield match.groups(0), self._attr_setter(tag, 'content')
+                yield match.groups(0), (tag, 'content')
 
 
 

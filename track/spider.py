@@ -60,11 +60,13 @@ class URL(object):
     Knows various metadata like depth, source etc.
     """
 
-    def __init__(self, url, previous=None, source=None, requisite=False):
+    def __init__(self, url, previous=None, source=None, requisite=False,
+                 **extra):
         self.url = url
         self.source = source
         self.requisite = requisite
         self.set_previous(previous)
+        self.extra = extra
 
     def set_previous(self, previous):
         """Set the url that is the source for this one.

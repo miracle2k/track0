@@ -282,8 +282,10 @@ class TestImpl(object):
         For example, if the spider followed a standard link, this would
         return ``a.href``. Other possible values include, for example,
         ``img.src`` or ``script.src``.
+
+        If the link was not found in a tag, this matches an empty string.
         """
-        return url.p
+        return url.extra.get('tag', '')
 
 
 AvailableTests = {
