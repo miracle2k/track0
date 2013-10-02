@@ -1,6 +1,6 @@
 import numbers
 import sys
-from os.path import commonprefix, normpath, abspath
+from os.path import commonprefix, normpath, abspath, basename, splitext
 import argparse
 from track.mirror import Mirror
 from track.spider import Spider, Rules
@@ -195,6 +195,96 @@ class TestImpl(object):
 
         return len(this) - len(source)
 
+    @staticmethod
+    def url(url):
+        """Match against the full url, including query string.
+        """
+        return url.url
+
+    @staticmethod
+    def protocol(url):
+        """Match against the protocol of the url.
+
+        This will be something like ``http`` or ``https``.
+        """
+        return url.parsed.scheme
+
+    @staticmethod
+    def domain(url):
+        """Match against the domain part of the url.
+
+        For example, if the url is ``http://www.apple.com/iphone/``,
+        then the domain will be ``http://www.apple.com``.
+        """
+        return url.parsed.netloc
+
+    @staticmethod
+    def port(url):
+        """Match against the port of the url.
+
+        For example, if the url is ``http://example.org:8080``, the port
+        is ``8080``. You can run numeric comparisons again it (larger than,
+        smaller than etc).
+
+        If the url does not specify a port, ``80`` is used.
+        """
+        return url.parsed.port or 80
+
+    @staticmethod
+    def path(url):
+        """Match against the path part of the url.
+
+        For example, if the url is ``http://www.apple.com/iphone/``,
+        then the path will be ``/iphone/``. At a minimum, the path
+        will always be a single slash ``/``.
+        """
+        # "http://example.org" would return an empty string, do not
+        # let that happen.
+        return url.parsed.path or '/'
+
+    @staticmethod
+    def filename(url):
+        """Match against the filename of a url.
+
+        For example, if the url is ``http://example.org/foo/index.html``,
+        the filename will be ``index.html``.
+
+        If the url is ``http://example.org/foo/``, the filename will be
+        empty. If the url is ``http://example.org/foo`` the filename will
+        be ``foo``.
+        """
+        return basename(url.parsed.path)
+
+    @staticmethod
+    def extension(url):
+        """Match against the file extension.
+
+        For example, if the url is ``http://example.org/foo/index.html``,
+        the extension will be ``html``.
+
+        If there is no file extension, this test will match an empty string.
+        """
+        return splitext(basename(url.parsed.path))[1][1:]
+
+    @staticmethod
+    def querystring(url):
+        """Match against the query string.
+
+        For example, if the url is ``http://example.org/foo/?page=2&user=1``,
+        the querystring will be ``page=2&user=1``.
+        """
+        return url.parsed.query
+
+    @staticmethod
+    def tag(url):
+        """The tag and attribute where the url was found.
+
+        For example, if the spider followed a standard link, this would
+        return ``a.href``. Other possible values include, for example,
+        ``img.src`` or ``script.src``.
+        """
+        return url.p
+
 
 AvailableTests = {
     '': TestImpl.default,
@@ -213,17 +303,18 @@ AvailableTests = {
 
     # Operating on the URL itself
     'url': TestImpl,
+    'protocol': TestImpl,
     'domain': TestImpl,
+    'port': TestImpl,
     'path': TestImpl,
     'filename': TestImpl,
     'extension': TestImpl,
     'querystring': TestImpl,
-    'mimetype': TestImpl,
-    'type': TestImpl,
 
     # Operating on URL metadata (headers)
     'content-type': TestImpl,
     'size': TestImpl,
+    'type': TestImpl,
 
     # Operating on the url/discovery source
     'tag': TestImpl,

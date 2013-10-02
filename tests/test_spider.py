@@ -23,6 +23,45 @@ class TestRules(object):
         assert test('/foo/bar', '/foo') == 1
         assert test('/foo/bar', '/foo/') == 0
 
+    def test_protocol(self):
+        test = lambda a: TestImpl.protocol(URL(a))
+
+        assert test('http://www.example.org/') == 'http'
+        assert test('mailto:info@example.org') == 'mailto'
+
+    def test_port(self):
+        test = lambda a: TestImpl.port(URL(a))
+
+        assert test('http://www.example.org/') == 80
+        assert test('http://www.example.org:8080') == 8080
+
+    def test_path(self):
+        test = lambda a: TestImpl.path(URL(a))
+
+        assert test('http://www.example.org/path/') == '/path/'
+        assert test('http://www.example.org/') == '/'
+        assert test('http://www.example.org') == '/'
+
+    def test_filename(self):
+        test = lambda a: TestImpl.filename(URL(a))
+
+        assert test('http://www.example.org/path/') == ''
+        assert test('http://www.example.org/path') == 'path'
+        assert test('http://www.example.org/path/index.html') == 'index.html'
+
+    def test_extension(self):
+        test = lambda a: TestImpl.extension(URL(a))
+
+        assert test('http://www.example.org/path/') == ''
+        assert test('http://www.example.org/path') == ''
+        assert test('http://www.example.org/index.html') == 'html'
+
+    def test_querystring(self):
+        test = lambda a: TestImpl.querystring(URL(a))
+
+        assert test('http://www.example.org/path/?a=1&b=2') == 'a=1&b=2'
+        assert test('http://www.example.org/path/') == ''
+
 
 class TestOperators(object):
 
