@@ -90,10 +90,7 @@ class HTMLParser(Parser):
     def _get_links_from_soup(self, soup):
         # See if there is a <base> tag.
         base = soup.find('base')
-        if base:
-            base_url = base.get('href', '')
-        else:
-            base_url = self.base_url
+        base_url = base.get('href', None) if base else None
 
         # Check tags that are known to have links of some sort.
         for tag, options in self.tags.items():
@@ -102,6 +99,8 @@ class HTMLParser(Parser):
 
             for element in soup.find_all(tag):
                 for url, setter in handler(element, options):
+                    if base_url:
+                        url = urljoin(base_url, url)
                     yield url, options, setter
 
     def _attr_setter(self, tag, attr_name):
