@@ -19,10 +19,20 @@ class Parser(object):
         self.data = data
         self.base_url = url
 
-    def __iter__(self):
-        yield from self._parse()
+    def absurl(self, url):
+        return urljoin(self.base_url, url)
 
-    def _parse(self):
+    def __iter__(self):
+        for url, opts in self._get_urls():
+            url = self.absurl(url)
+
+            # Put together a url object with all the info that
+            # we have ad that tests can use.
+            from .spider import URL
+            yield URL(url,
+                      requisite=opts.get('inline', False))
+
+    def _get_urls(self):
         raise NotImplementedError()
 
     def replace_links(self, replacer):
@@ -60,13 +70,13 @@ class HTMLParser(Parser):
 
     def replace_links(self, replacer):
         soup = BeautifulSoup(self.data)
-        for url, setter in self._get_links_from_soup(soup):
-            new_value = replacer(url)
+        for url, options, setter in self._get_links_from_soup(soup):
+            new_value = replacer(self.absurl(url))
             if new_value is not None:
                 setter(new_value)
         return str(soup)
 
-    def _parse(self):
+    def _get_urls(self):
         # TODO: Neither html.parser not html5lib doeskeep the specific
         # whitespace or quoting within attributes, possibly even order
         # is lost. If we want to write out a more exact replica of the
@@ -74,8 +84,8 @@ class HTMLParser(Parser):
         # lxml? replace based on line numbers?)
         # It also does not parse <!--[if IE]> comments.
         soup = BeautifulSoup(self.data)
-        for url, setter in self._get_links_from_soup(soup):
-            yield url
+        for url, options, setter in self._get_links_from_soup(soup):
+            yield url, options
 
     def _get_links_from_soup(self, soup):
         # See if there is a <base> tag.
@@ -86,21 +96,13 @@ class HTMLParser(Parser):
             base_url = self.base_url
 
         # Check tags that are known to have links of some sort.
-        from .spider import URL
         for tag, options in self.tags.items():
             handler = getattr(self, '_handle_tag_{0}'.format(tag),
                               self._handle_tag)
 
             for element in soup.find_all(tag):
                 for url, setter in handler(element, options):
-                    # Make sure the url is absolute
-                    url = urljoin(base_url, url)
-
-                    # Put together a url object with all the info that
-                    # we have ad that tests can use.
-                    yield URL(url,
-                              requisite=options.get('inline', False)), \
-                          setter
+                    yield url, options, setter
 
     def _attr_setter(self, tag, attr_name):
         def setter(new_value):
@@ -168,101 +170,173 @@ class HTMLParser(Parser):
                 yield match.groups(0), self._attr_setter(tag, 'content')
 
 
-class CSSParser(Parser):
-    urltag_re = re.compile(r"""
-        # url() expressions. real url() expressions support both types of
-        # quotes ('") as well as no quotes at all. I didn't manage to
-        # make all three cases work with a regular expression, so instead
-        # we'll be stripping of surrounding quotes in code.
-        # TODO: The problem with this: It won't match url(")")
-        # It would be slower but simpler to use 3 expressions. Or we
-        # might write a really simple parser.
-        url\(
-          # Some whitespace first
-          \s*
-          # Now the actual url
-          (?P<url1>
-            (?:
-              # anything, except for a closing bracket and not
-              # a backslash, which are handled separately.
-              [^\\\)\n\r]
-              |
-              # Allow backslash to escape characters
-              \\.
-            )*
-          )?
-          \s*
-        # closing bracket
-        \)
 
-        |
+class ParserKit:
+    """This is a very basic character lexer.
 
-        # import rules that do not use url().
-        @import
-          # First some whitespace
-          \s*
-          # Then the opening quote
-          (?P<quote>['"])
-          # Now the actual url
-          (?P<url2>
-            # repeat (non-greedy, so we don't span multiple strings)
-            (?:
-              # anything, except not the opening quote, and not
-              # a backslash, which are handled separately, and
-              # no line breaks.
-              [^\\\1]
-              |
-              # Allow backslash to escape characters
-              \\.
-            )*?
-          )
-          # same character as opening quote
-          (?P=quote)
-          # and allow some whitespace again
-          \s*
-        """, re.VERBOSE)
+    The key method is :meth:`switch_element`.
+    """
+    def __init__(self, data):
+        self.data = data
+        self.pos = 0
+        self.element = None
+        self.switch_element()
 
-    def rewrite_url(self, m):
-        # Get the regex matches; note how we maintain the exact
-        # whitespace around the actual url; we'll indeed only
-        # replace the url itself.
-        text_before = m.groups()[0]
-        url = m.groups()[1]
-        text_after = m.groups()[2]
+    def next(self, num=1):
+        self.pos += num
+        return self.peek(-num)
 
-        # Normalize the url: remove quotes
-        quotes_used = ''
-        if url[:1] in '"\'':
-            quotes_used = url[:1]
-            url = url[1:]
-        if url[-1:] in '"\'':
-            url = url[:-1]
+    def peek(self, num=1):
+        return self.data[self.pos+num] if self.pos<len(self.data)-num else None
 
-        url = self.replace_url(url) or url
+    def cur(self):
+        return self.peek(0)
 
-        result = 'url(%s%s%s%s%s)' % (
-            text_before, quotes_used, url, quotes_used, text_after)
+    def match(self, text):
+        result = text == self.data[self.pos:self.pos+len(text)]
+        if result:
+            self.next(len(text))
+            return True
+        return False
+
+    def next_if(self, c):
+        if self.cur() == c:
+            self.next()
+            return True
+        return False
+
+    def skip_whitespace(self):
+        while self.cur() in '\n\r\t ':
+            self.next()
+
+    def skip_until(self, *chars, escape_chr=None):
+        chars = ''.join(chars)
+        result = ''
+        quoted = False
+        while True:
+            if self.cur() == escape_chr:
+                self.next()
+                quoted = True
+                continue
+            if quoted:
+                result += self.next()
+                quoted = False
+            elif not self.cur() in chars:
+                result += self.next()
+            else:
+                break
         return result
 
+    def switch_element(self, **attrs):
+        """Helps the parser serialize the whole file into a series of
+        elements; we don't call them nodes, because they are not
+        hierarchical.
+
+        This is based on the idea that most of the file will be returned
+        as an *unknown* node that we are not familiar with, and a few
+        that we do care about (e.g. urls).
+
+        One element is always active. When this method is called, the
+        current element is finished, and a new element is made current.
+
+        The previous element is returned, and knows at which position
+        in the file it was started, and where it ends.
+        """
+        old_element = self.element
+        self.element = {'type': 'unknown', 'pos': self.pos}
+        if old_element:
+            old_element.update(attrs)
+            old_element['data'] = self.data[old_element['pos']:self.pos]
+            return old_element
+
+
+class CSSParser(Parser):
+
+    def replace_links(self, replacer):
+        elements = list(self._parse())
+
+        for element in elements:
+            if element['type'] == 'url':
+                new_url = replacer(self.absurl(element['url']))
+                if new_url:
+                    element['data'] = '"{0}"'.format(new_url.replace('"', '\\"'))
+
+        return ''.join([el['data'] for el in elements])
+
+    def _get_urls(self):
+        elements = self._parse()
+        for element in elements:
+            if element['type'] == 'url':
+                yield element['url'], {'inline': True}
+
     def _parse(self):
-        # Remove comments first
-        data = re.sub(r'(?s)/\*.*\*/', '', self.data)
+        p = ParserKit(self.data)
 
-        result = []
-        def new_link(m):
-            matches = m.groupdict()
-            url = matches['url1'] or matches['url2']
-            result.append(url)
+        peek = p.peek
+        cur = p.cur
+        match = p.match
+        next = p.next
 
-        new_data = self.urltag_re.sub(new_link, data)
-        yield from result
+        while cur():
+            # Skip comments
+            if cur() == '/' and peek() == '*':
+                next(2)
+                while cur() != '*' or peek() != '*':
+                    next(2)
 
-    def replace_links(self):
-        raise NotImplementedError
+            # @import without url()
+            if match('@import'):
+                p.skip_whitespace()
+                if cur() in '"\'':
+                    # Have the element include the quotes, for we need to
+                    # be able to properly escape a replacement url.
+                    yield p.switch_element()
+                    quote_chr = next()
+
+                    # Find the actual url
+                    url = p.skip_until(quote_chr+'\n\r', escape_chr='\\')
+
+                    # If there is a closing quote, include it
+                    p.next_if(quote_chr)
+                    yield p.switch_element(type='url', url=url)
+                continue
+
+            # url() instructions
+            if match('url('):
+                p.skip_whitespace()
+
+                # Start new element with opening quote included
+                yield p.switch_element()
+                quote_chr = None
+                if cur() in '"\'':
+                    quote_chr = next()
+
+                # Find the actual url
+                url = p.skip_until(quote_chr or ')', '\n\r', escape_chr='\\')
+
+                # If there is a closing quote, include it
+                # (a closing bracket is not included).
+                if quote_chr:
+                    p.next_if(quote_chr)
+                yield p.switch_element(type='url', url=url)
+                continue
+
+            next()
+
+        # Complete the final element
+        yield p.switch_element()
 
 
-class JavasSriptParser(Parser):
+class JavasScriptParser(Parser):
 
     def _parse(self):
         # No parsing JavaScript for now...
         yield from ()
+
+
+def get_parser_for_mimetype(mimetype):
+    if mimetype == 'text/html':
+        return HTMLParser
+    elif mimetype == 'text/css':
+        return CSSParser
+    return None

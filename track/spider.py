@@ -2,7 +2,7 @@ from collections import deque
 import requests
 from urllib.parse import urlparse
 from requests.exceptions import InvalidSchema, MissingSchema
-from track.parser import HTMLParser
+from track.parser import HTMLParser, get_parser_for_mimetype
 
 
 class Logger(object):
@@ -168,7 +168,11 @@ class Spider(object):
         # Attach a link parser now, which will start to work when needed.
         # The mirror might need the links during save, or the spider when
         # the @stop rules pass. Or we might get away without parsing.
-        page.parsed = HTMLParser(page.text, page.url)
+        parser_class = get_parser_for_mimetype(get_content_type(page))
+        if parser_class:
+            page.parsed = parser_class(page.text, page.url)
+        else:
+            page.parsed = None
 
         # Save the file locally?
         if self.mirror and self.rules.save(url):
@@ -184,10 +188,9 @@ class Spider(object):
 
         # Add all links
         content_type = get_content_type(page)
-        if content_type in ('text/html',):
-            for link in page.parsed:
-                link.set_previous(url)
-                self._url_queue.appendleft(link)
+        for link in page.parsed or ():
+            link.set_previous(url)
+            self._url_queue.appendleft(link)
 
     def download(self, url):
         request = requests.Request('GET', url.url).prepare()

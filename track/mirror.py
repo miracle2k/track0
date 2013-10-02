@@ -120,7 +120,7 @@ import os
 from os import path
 from urllib.parse import urlparse
 import itertools
-from track.parser import HTMLParser
+from track.parser import HTMLParser, get_parser_for_mimetype
 from track.spider import get_content_type
 
 
@@ -199,7 +199,7 @@ class Mirror(object):
         # Add to database
         self.urls[response.url] = rel_filename
         self.url_info[response.url] = {'mimetype': get_content_type(response)}
-        for url in response.parsed:
+        for url in response.parsed or ():
             self.url_usage.setdefault(url.url, [])
             self.url_usage[url.url].append(response.url)
 
@@ -241,16 +241,16 @@ class Mirror(object):
 
     def _convert_links_in_file(self, file, url):
         mimetype = self.url_info[url]['mimetype']
-        if not mimetype == 'text/html':
+        parser_class = get_parser_for_mimetype(mimetype)
+        if not parser_class:
             return
 
         with self.open(file, 'r+') as f:
             # A simple way to speed this up would also be to keep a
             # certain contingent of previously-parsed documents in memory.
-            parsed = HTMLParser(f.read(), url)
+            parsed = parser_class(f.read(), url)
 
             def replace_link(url):
-                url = url.url
                 # We have a copy of this
                 if url in self.urls:
                     target_filename = self.urls[url]
