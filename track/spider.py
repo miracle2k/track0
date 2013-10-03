@@ -232,7 +232,11 @@ class Spider(object):
             return
 
         # Add all links
-        for link in page.parsed or ():
+        for link, opts in page.parsed or ():
+            # Put together a url object with all the info that
+            # we have ad that tests can use.
+            requisite = opts.pop('inline', False)
+            link = URL(link, requisite=requisite, **opts)
             link.set_previous(url)
             self._url_queue.appendleft(link)
 

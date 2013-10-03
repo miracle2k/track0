@@ -24,13 +24,7 @@ class Parser(object):
 
     def __iter__(self):
         for url, opts in self._get_urls():
-            url = self.absurl(url)
-
-            # Put together a url object with all the info that
-            # we have ad that tests can use.
-            from .spider import URL
-            requisite = opts.pop('inline', False)
-            yield URL(url, requisite=requisite, **opts)
+            yield self.absurl(url), opts
 
     def _get_urls(self):
         raise NotImplementedError()

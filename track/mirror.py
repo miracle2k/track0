@@ -199,9 +199,9 @@ class Mirror(object):
         # Add to database
         self.urls[response.url] = rel_filename
         self.url_info[response.url] = {'mimetype': get_content_type(response)}
-        for url in response.parsed or ():
-            self.url_usage.setdefault(url.url, [])
-            self.url_usage[url.url].append(response.url)
+        for url, _ in response.parsed or ():
+            self.url_usage.setdefault(url, [])
+            self.url_usage[url].append(response.url)
 
         # See if we should apply modifications now (as opposed to waiting
         # until the last response has been added).
