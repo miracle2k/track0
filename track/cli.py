@@ -312,7 +312,7 @@ class TestImpl(object):
         response = url.resolve('head')
         if not response:
             return None
-        return get_content_type(response.headers.get('content-type', ''))
+        return get_content_type(response)
 
     @staticmethod
     def content(url):
