@@ -603,7 +603,12 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 def main(argv):
     parser = MyArgumentParser(argv[0], prefix_chars='-@')
-    parser.add_argument('-O', '--path')
+    parser.add_argument(
+        '-O', '--path',
+        help='output directory for the mirror')
+    parser.add_argument(
+        '-F', '--from-file', action='append', metavar='FILE',
+        help='Add urls from the file, one per line; can be given multiple times')
     parser.add_argument(
         'url', nargs='+', metavar='url',
         help='urls to be added to the queue initially as a starting point')
@@ -632,8 +637,15 @@ def main(argv):
         print('error: {1}: {0}'.format(*e.args))
         return
 
+    # Add the urls specified at the command line
     for url in namespace.url:
         spider.add(url)
+
+    # Load urls from additional files specified
+    for filename in namespace.from_file:
+        with open(filename, 'r') as f:
+            for url in f.readlines():
+                spider.add(url.strip())
     spider.loop()
 
 
