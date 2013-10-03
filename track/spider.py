@@ -35,6 +35,10 @@ class Rules(object):
         :meth:`save`.
         """
 
+    def configure_session(self, request):
+        """Allows configuring the general environment.
+        """
+
     def configure_request(self, request, url):
         """Allows configuring the request for each url.
         """
@@ -167,6 +171,7 @@ class Spider(object):
     def session(self):
         if not hasattr(self, '_session'):
             self._session = requests.Session()
+            self.rules.configure_session(self._session)
             self._session.configure_request = self.rules.configure_request
         return self._session
 

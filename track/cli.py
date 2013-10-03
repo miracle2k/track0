@@ -453,6 +453,14 @@ Operators = {
 }
 
 
+UserAgents = {
+    'chrome': 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.17 Safari/537.36',
+    'firefox': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0',
+    'ie': 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT 6.1; Trident/5.0; InfoPath.2; SLCC1; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729; .NET CLR 2.0.50727) 3gpp-gba UNTRUSTED/1.0',
+    'safari': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/537.13+ (KHTML, like Gecko) Version/5.1.7 Safari/534.57.2'
+}
+
+
 class RuleError(Exception):
     pass
 
@@ -554,6 +562,14 @@ class CLIRules(Rules):
     def stop(self, url):
         return self._apply_rules(self.stop_rules, url)
 
+    def configure_session(self, session):
+        user_agent = UserAgents.get(
+            self.arguments.user_agent, self.arguments.user_agent) or \
+                     'Track/alpha'
+        session.headers.update({
+            'User-Agent': user_agent,
+        })
+
 
 class MyArgumentParser(argparse.ArgumentParser):
 
@@ -609,6 +625,10 @@ def main(argv):
     parser.add_argument(
         '-F', '--from-file', action='append', metavar='FILE',
         help='Add urls from the file, one per line; can be given multiple times')
+    parser.add_argument(
+        '-u', '--user-agent',
+        help="user agent string to use; the special values 'firefox', "
+             "'safari', 'chrome', 'ie' are recognized")
     parser.add_argument(
         'url', nargs='+', metavar='url',
         help='urls to be added to the queue initially as a starting point')
