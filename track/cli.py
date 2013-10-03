@@ -608,8 +608,10 @@ def main(argv):
         'url', nargs='+', metavar='url',
         help='urls to be added to the queue initially as a starting point')
     parser.add_argument(
-        '@follow', nargs='+', metavar='rule', default=['-'],
-        help="rules that determine whether a url will be downloaded.")
+        '@follow', nargs='+', metavar='rule', default=['-', '+requisite'],
+        help="rules that determine whether a url will be downloaded; default"
+             "is '- _requisite', meaning only the url itself and it's assets"
+             "are followed")
     parser.add_argument(
         '@save', nargs='+', metavar='rule', default=['+'],
         help="rules that determine whether a url will be saved; default "
