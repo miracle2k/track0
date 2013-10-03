@@ -211,7 +211,7 @@ class ParserKit:
         chars = ''.join(chars)
         result = ''
         quoted = False
-        while True:
+        while self.cur() is not None:
             if self.cur() == escape_chr:
                 self.next()
                 quoted = True
@@ -279,7 +279,7 @@ class CSSParser(Parser):
             # Skip comments
             if cur() == '/' and peek() == '*':
                 next(2)
-                while cur() != '*' or peek() != '*':
+                while cur() is not None and (cur() != '*' or peek() != '/'):
                     next(2)
 
             # @import without url()
