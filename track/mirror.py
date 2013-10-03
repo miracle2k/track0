@@ -181,7 +181,7 @@ class Mirror(object):
             os.makedirs(path.dirname(full_filename))
         return open(full_filename, mode)
 
-    def add(self, response):
+    def add(self, url, response):
         """Store the given page.
         """
         # Store the file

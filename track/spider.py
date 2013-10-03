@@ -206,27 +206,25 @@ class Spider(object):
 
         # Download the URL
         self.logger.url(url)
-        page = url.resolve('full')
-        if not page:
+        response = url.resolve('full')
+        if not response:
             return
 
-        page.url_obj = url
-
-        # TODO: page.links contains links from http headers. Should we
+        # TODO: response.links contains links from http headers. Should we
         # do something with them?
 
         # Attach a link parser now, which will start to work when needed.
         # The mirror might need the links during save, or the spider when
         # the @stop rules pass. Or we might get away without parsing.
-        parser_class = get_parser_for_mimetype(get_content_type(page))
+        parser_class = get_parser_for_mimetype(get_content_type(response))
         if parser_class:
-            page.parsed = parser_class(page.text, page.url)
+            response.parsed = parser_class(response.text, response.url)
         else:
-            page.parsed = None
+            response.parsed = None
 
         # Save the file locally?
         if self.mirror and self.rules.save(url):
-            self.mirror.add(page)
+            self.mirror.add(url, response)
 
         # No need to process this url again
         self._known_urls.append(url.url)
@@ -237,7 +235,7 @@ class Spider(object):
             return
 
         # Add all links
-        for link, opts in page.parsed or ():
+        for link, opts in response.parsed or ():
             # Put together a url object with all the info that
             # we have ad that tests can use.
             requisite = opts.pop('inline', False)
