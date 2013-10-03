@@ -240,3 +240,19 @@ This uses the ``domain-depth`` test, which is the depth since the spider
 arrived at the current domain. Therefore, the rule above would spider the
 original domain, but would also allow any urls that were just discovered
 pointing to a different domain.
+
+
+Allowing a size range
+~~~~~~~~~~~~~~~~~~~~~
+
+This would be the standard way::
+
+    $ track
+        http://www.example.org
+        @follow +size>10 -size>20
+
+But just for fun, here are some other options::
+
+    + -size<10 -size>20
+    - --size>20 +size>10
+
