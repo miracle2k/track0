@@ -226,6 +226,9 @@ class Mirror(object):
         """Convert links in all downloaded files, or all files
         that are known to link to ``for_url``.
         """
+        if not self.convert_links:
+            return
+
         if not for_url:
             files_to_process = self.urls.items()
         else:
