@@ -77,6 +77,9 @@ class HTMLParser(Parser):
         # input, we need to look elsewhere (
         # lxml? replace based on line numbers?)
         # It also does not parse <!--[if IE]> comments.
+        # Further, we are losing things like &nbsp; entities, which
+        # at the very least complicate encoding issues we have with
+        # the local mirror.
         soup = BeautifulSoup(self.data)
         for url, options, setter in self._get_links_from_soup(soup):
             yield url, options
