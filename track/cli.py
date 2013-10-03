@@ -1,5 +1,6 @@
 import numbers
 import sys
+import fnmatch
 from os.path import commonprefix, normpath, abspath, basename, splitext
 import argparse
 from track.mirror import Mirror
@@ -279,6 +280,10 @@ class TestImpl(object):
     def size(url):
         """Test the size of the document behind a url.
 
+        You may use K, M or G as units::
+
+            +size<1M
+
         Note: This will execute a HEAD request to the url to determine
         the size.
         """
@@ -361,14 +366,30 @@ AvailableTests = {
 }
 
 
+UNITS = {
+    'G': 1000*1000*1000,
+    'M': 1000*1000,
+    'K': 1000
+}
+
+
 class OperatorImpl:
     @classmethod
     def _norm(cls, system_value, user_value):
+        # If the system value is a number, treat the user value as one.
         if isinstance(system_value, numbers.Number):
+            # If a prefix is attached, resolve it
+            unit = None
+            if user_value and user_value[-1] in UNITS:
+                user_value, unit = user_value[:-1], user_value[-1]
             try:
-                user_value = int(user_value)
+                user_value = float(user_value)
             except ValueError:
                 user_value = False
+            else:
+                if unit:
+                    user_value = user_value * UNITS[unit]
+
         return system_value, user_value
 
     @classmethod
@@ -381,34 +402,37 @@ class OperatorImpl:
         return (a is None and b is None) or (not a is None and not b is None)
 
     @classmethod
-    def truth(cls, a, b=None):
-        assert not b
-        return bool(a)
+    def truth(cls, sys, user=None):
+        assert not user
+        return bool(sys)
 
     @classmethod
-    def equality(cls, a, b):
-        a, b = cls._norm(a, b)
-        return cls._same(a, b) and a == b
+    def equality(cls, sys, user):
+        if isinstance(sys, str) and isinstance(user, str):
+            return fnmatch.fnmatch(sys, user)
+
+        sys, user = cls._norm(sys, user)
+        return cls._same(sys, user) and sys == user
 
     @classmethod
-    def smaller(cls, a, b):
-        a, b = cls._norm(a, b)
-        return cls._same(a, b) and a < b
+    def smaller(cls, sys, user):
+        sys, user = cls._norm(sys, user)
+        return cls._same(sys, user) and sys < user
 
     @classmethod
-    def larger(cls, a, b):
-        a, b = cls._norm(a, b)
-        return cls._same(a, b) and a > b
+    def larger(cls, sys, user):
+        sys, user = cls._norm(sys, user)
+        return cls._same(sys, user) and sys > user
 
     @classmethod
-    def larger_or_equal(cls, a, b):
-        a, b = cls._norm(a, b)
-        return cls._same(a, b) and a >= b
+    def larger_or_equal(cls, sys, user):
+        sys, user = cls._norm(sys, user)
+        return cls._same(sys, user) and sys >= user
 
     @classmethod
-    def smaller_or_equal(cls, a, b):
-        a, b = cls._norm(a, b)
-        return cls._same(a, b) and a <= b
+    def smaller_or_equal(cls, sys, user):
+        sys, user = cls._norm(sys, user)
+        return cls._same(sys, user) and sys <= user
 
 
 Operators = {

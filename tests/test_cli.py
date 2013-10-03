@@ -79,3 +79,10 @@ class TestOperators(object):
         assert OperatorImpl.equality(False, '') is True
 
         assert OperatorImpl.larger(4, '') is False
+
+        assert OperatorImpl.smaller(800, '1K') is True
+        assert OperatorImpl.smaller(1200, '1K') is False
+
+    def test_string(self):
+        assert OperatorImpl.equality('foo', 'foo') is True
+        assert OperatorImpl.equality('foo', '*o') is True
