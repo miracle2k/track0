@@ -285,12 +285,20 @@ class TestImpl(object):
             +size<1M
 
         Note: This will execute a HEAD request to the url to determine
-        the size.
+        the size. If the HEAD request does not include information about
+        the size, the full url needs to be fetched.
         """
         response = url.resolve('head')
         if not response:
             return None
-        return response.headers.get('content-length', None)
+        length = response.headers.get('content-length', None)
+        if length is None:
+            response = url.resolve('full')
+            if not response:
+                return None
+            length = response.headers.get('content-length', None)
+        return length
+
 
     @staticmethod
     def content_type(url):
