@@ -40,7 +40,7 @@ class HTMLParser(Parser):
     tags = {
         'a': {'attr': ['href']},
         'img': {'attr': ['href', 'src', 'lowsrc'], 'inline': True},
-        'script': {'attr': ['src']},
+        'script': {'attr': ['src'], 'inline': True},
         'link': {},
 
         'applet': {'attr': ['code'], 'inline': True},
@@ -92,9 +92,10 @@ class HTMLParser(Parser):
                               self._handle_tag)
 
             for element in soup.find_all(tag):
-                for url, (tag, attr) in handler(element, options):
+                for url, opts, (tag, attr) in handler(element, options):
                     if base_url:
                         url = urljoin(base_url, url)
+                    options.update(opts)
                     options['tag'] = '{0}.{1}'.format(tag.name, attr)
                     yield url, options, self._attr_setter(tag, attr)
 
@@ -110,7 +111,7 @@ class HTMLParser(Parser):
             url = tag.get(attr)
             if not url:
                 continue
-            yield url, (tag, attr)
+            yield url, {}, (tag, attr)
 
     def _handle_tag_link(self, tag, opts, **kwargs):
         """Handle the <link> tag. There are different types:
@@ -131,9 +132,9 @@ class HTMLParser(Parser):
         url = tag.get('href')
         if not url:
             return
-        rel = map(lambda s: s.lower(), tag.get('rel', []))
+        rel = list(map(lambda s: s.lower(), tag.get('rel', [])))
         is_inline = rel == ['stylesheet'] or 'icon' in rel   # TODO
-        yield url, (tag, 'href')
+        yield url, {'inline': is_inline}, (tag, 'href')
 
     def _handle_tag_form(self, tag, opts, **kwargs):
         """Handle the <form> tag.
@@ -161,8 +162,8 @@ class HTMLParser(Parser):
             content = tag.get('content', '')
             match = re.match(r'url=(.*)', content, re.IGNORECASE)
             if match:
-                yield match.groups(0), (tag, 'content')
-
+                # TODO: replacing this link is harder
+                yield match.groups(0), {}, (tag, 'content')
 
 
 class ParserKit:
