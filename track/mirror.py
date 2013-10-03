@@ -186,15 +186,15 @@ class Mirror(object):
         """
         # Store the file
         rel_filename = determine_filename(response.url, response)
-        with self.open(rel_filename, 'w') as f:
-            f.write(response.text)
+        with self.open(rel_filename, 'wb') as f:
+            f.write(response.content)
 
         # We also add a copy that will not be affected by any link
         # converting for debugging purposes. It'll allow us to validate
         # via a diff what the conversion is doing.
         if self.convert_links:
-            with self.open(path.join('.originals', rel_filename), 'w') as f:
-                f.write(response.text)
+            with self.open(path.join('.originals', rel_filename), 'wb') as f:
+                f.write(response.content)
 
         # Add to database
         self.urls[response.url] = rel_filename
