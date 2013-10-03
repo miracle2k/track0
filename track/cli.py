@@ -619,19 +619,29 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 def main(argv):
     parser = MyArgumentParser(argv[0], prefix_chars='-@')
+    # Affecting the local mirror
     parser.add_argument(
         '-O', '--path',
         help='output directory for the mirror')
     parser.add_argument(
+        '--no-link-conversion', action='store_true',
+        help='do not modify urls in the local copy in any way')
+    parser.add_argument(
+        '--no-live-update', action='store_true',
+        help='delay local mirror modifications until the spider is done')
+    # Affecting the start urls
+    parser.add_argument(
         '-F', '--from-file', action='append', metavar='FILE',
         help='Add urls from the file, one per line; can be given multiple times')
+    parser.add_argument(
+        'url', nargs='+', metavar='url',
+        help='urls to be added to the queue initially as a starting point')
+    # Affecting the parsing process
     parser.add_argument(
         '-u', '--user-agent',
         help="user agent string to use; the special values 'firefox', "
              "'safari', 'chrome', 'ie' are recognized")
-    parser.add_argument(
-        'url', nargs='+', metavar='url',
-        help='urls to be added to the queue initially as a starting point')
+
     parser.add_argument(
         '@follow', nargs='+', metavar='rule', default=['-', '+requisite'],
         help="rules that determine whether a url will be downloaded; default"
@@ -651,7 +661,10 @@ def main(argv):
 
     try:
         output_path = normpath(abspath(namespace.path or 'tracked'))
-        mirror = Mirror(output_path)
+        mirror = Mirror(
+            output_path,
+            write_at_once=not namespace.no_live_update,
+            convert_links=namespace.no_link_conversion)
         spider = Spider(CLIRules(namespace), mirror=mirror)
     except RuleError as e:
         print('error: {1}: {0}'.format(*e.args))
