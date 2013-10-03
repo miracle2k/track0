@@ -634,7 +634,7 @@ def main(argv):
         '-F', '--from-file', action='append', metavar='FILE',
         help='Add urls from the file, one per line; can be given multiple times')
     parser.add_argument(
-        'url', nargs='+', metavar='url',
+        'url', nargs='*', metavar='url',
         help='urls to be added to the queue initially as a starting point')
     # Affecting the parsing process
     parser.add_argument(
@@ -675,10 +675,15 @@ def main(argv):
         spider.add(url)
 
     # Load urls from additional files specified
-    for filename in namespace.from_file:
+    for filename in namespace.from_file or ():
         with open(filename, 'r') as f:
             for url in f.readlines():
                 spider.add(url.strip())
+
+    if not len(spider):
+        parser.print_usage()
+        print('error: I need at least one url to start with')
+        return
     spider.loop()
 
 

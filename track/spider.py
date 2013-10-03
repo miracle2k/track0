@@ -167,6 +167,9 @@ class Spider(object):
         self.mirror = mirror
         self.logger = Logger()
 
+    def __len__(self):
+        return len(self._url_queue)
+
     @property
     def session(self):
         if not hasattr(self, '_session'):
