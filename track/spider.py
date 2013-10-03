@@ -102,6 +102,46 @@ class URL(object):
             self._parsed = urlparse(self.url)
         return self._parsed
 
+    def resolve(self, type):
+        """This actually executes a request for this URL.
+
+        A ``session`` attribute with a ``requests`` session needs to
+        be set for this to work. This session needs to be adorned
+        with a ``configure_request()`` method, which would usually
+        go to the :meth:`Rules.configure_request` hook.
+
+        ``type`` specifies whether a HEAD request suffices, or if you
+        need a full request. The trick is that this will cache the
+        response, and return the cached response if possible.
+
+        It can therefore be called by different parts of the system
+        (the tests, the spider, the mirror) without concern for
+        unnecessary network traffic.
+        """
+        assert type in ('head', 'full')
+        if not hasattr(self, 'session'):
+            raise TypeError(
+                'This URL instance has no session, cannot resolve().')
+
+        # TODO: We can optimize this further, no need to try a full
+        # request if the head already returned an error. We might also
+        # just try to raise the error all the way through the rule handling.
+        if not hasattr(self, '_response') or (
+                getattr(self, '_response_type') == 'head' and type == 'full'):
+            try:
+                method = 'GET' if type=='full' else 'HEAD'
+                request = requests.Request(method, self.url).prepare()
+                self.session.configure_request(request, self)
+                self._response = self.session.send(request)
+            except (InvalidSchema, MissingSchema):
+                # Urls like xri://, mailto: and the like.
+                self._response = False
+            finally:
+                self._response_type = type
+
+        return self._response
+
+
     def __repr__(self):
         return '<URL {0}>'.format(self.url)
 
@@ -127,6 +167,7 @@ class Spider(object):
     def session(self):
         if not hasattr(self, '_session'):
             self._session = requests.Session()
+            self._session.configure_request = self.rules.configure_request
         return self._session
 
     def add(self, url):
@@ -151,17 +192,19 @@ class Spider(object):
         if url.url in self._known_urls:
             return
 
+        # Attach a session to the url so it can resolve itself
+        url.session = self.session
+
         # Test whether this is a link that we should even follow
-        if url.source!='user' and not self.rules.follow(url):
+        if url.source != 'user' and not self.rules.follow(url):
             return
 
         # Download the URL
         self.logger.url(url)
-        try:
-            page = self.download(url)
-        except (InvalidSchema, MissingSchema):
-            # Urls like xri://, mailto: and the like.
+        page = url.resolve('full')
+        if not page:
             return
+
         page.url_obj = url
 
         # TODO: page.links contains links from http headers. Should we
@@ -189,13 +232,8 @@ class Spider(object):
             return
 
         # Add all links
-        content_type = get_content_type(page)
         for link in page.parsed or ():
             link.set_previous(url)
             self._url_queue.appendleft(link)
 
-    def download(self, url):
-        request = requests.Request('GET', url.url).prepare()
-        self.rules.configure_request(request, url)
-        return self.session.send(request)
 

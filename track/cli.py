@@ -3,7 +3,7 @@ import sys
 from os.path import commonprefix, normpath, abspath, basename, splitext
 import argparse
 from track.mirror import Mirror
-from track.spider import Spider, Rules
+from track.spider import Spider, Rules, get_content_type
 
 
 class TestImpl(object):
@@ -276,6 +276,43 @@ class TestImpl(object):
         return url.parsed.query
 
     @staticmethod
+    def size(url):
+        """Test the size of the document behind a url.
+
+        Note: This will execute a HEAD request to the url to determine
+        the size.
+        """
+        response = url.resolve('head')
+        if not response:
+            return None
+        return response.headers.get('content-length', None)
+
+    @staticmethod
+    def content_type(url):
+        """Match against the content type of the url.
+
+        A content type might be ``text/html`` or ``image/png``.
+
+        Note: This will execute a HEAD request to the url to determine
+        the content type.
+        """
+        response = url.resolve('head')
+        if not response:
+            return None
+        return get_content_type(response.headers.get('content-type', ''))
+
+    @staticmethod
+    def content(url):
+        """Match against the content of the url.
+
+        Careful! This test requires a url to be downloaded in full .
+        """
+        response = url.resolve('full')
+        if not response:
+            return None
+        return response.text
+
+    @staticmethod
     def tag(url):
         """The tag and attribute where the url was found.
 
@@ -316,7 +353,7 @@ AvailableTests = {
     # Operating on URL metadata (headers)
     'content-type': TestImpl,
     'size': TestImpl,
-    'type': TestImpl,
+    'content': TestImpl,
 
     # Operating on the url/discovery source
     'tag': TestImpl,
