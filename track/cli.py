@@ -1,4 +1,6 @@
+import hashlib
 import numbers
+import string
 import sys
 import fnmatch
 from os.path import commonprefix, normpath, abspath, basename, splitext
@@ -504,7 +506,7 @@ class CLIRules(Rules):
         while stack and stack[0] not in op_chars:
             test_name += stack.pop(0)
         # Check the test name now for an early error
-        test = self._get_test(test_name)
+        test = self.get_test(test_name)
         if not test:
             raise RuleError('{0} is not a valid test'.format(test_name), rule)
 
@@ -518,7 +520,8 @@ class CLIRules(Rules):
 
         return (action, is_stop_action), test, op, value
 
-    def _get_test(self, name):
+    @classmethod
+    def get_test(cls, name):
         try:
             test = AvailableTests[name]
         except KeyError:
@@ -569,6 +572,66 @@ class CLIRules(Rules):
         session.headers.update({
             'User-Agent': user_agent,
         })
+
+
+class URLFormatter(string.Formatter):
+    """Format a url into a filename using the tests.
+
+    ::
+        format('{domain}/{path}', url)
+        format('{url|md5}', url)
+    """
+
+    def get_field(self, field_name, args, kwargs):
+        url = args[0]
+
+        # Parse the field name for filters. We can't use the standard
+        # Python format() format and convert specs etc. because they
+        # are too restrictive (e.g. only one character).
+        field_name, *filters = (field_name+',').split(',', 2)
+
+        # Run the test for the value
+        test = CLIRules.get_test(field_name)
+        value = test(url)
+
+        # Normalize test result
+        if value is None:
+            value = ''
+        elif value in (True, False):
+            value = 'yes' if value else 'no'
+        elif not isinstance(value, str):
+            value = str(value)
+
+        # Apply filters
+        for fname in filter(bool, filters):
+            if fname.isdigit():
+                value = value[:int(fname)]
+            elif fname == 'md5':
+                value = hashlib.md5(value.encode()).hexdigest()
+
+        return value, field_name
+
+
+class CLIMirror(Mirror):
+    """Customized mirror that follows the user's options.
+    """
+
+    def __init__(self, namespace):
+        output_path = normpath(abspath(namespace.path or 'tracked'))
+        Mirror.__init__(
+            self,
+            output_path,
+            write_at_once=not namespace.no_live_update,
+            convert_links=namespace.no_link_conversion)
+
+        self.layout = namespace.layout
+        self._url_formatter = URLFormatter()
+
+    def get_filename(self, url, response):
+        if self.layout:
+            return self._url_formatter.format(self.layout, url)
+        return Mirror.get_filename(self, url, response)
+
 
 
 class MyArgumentParser(argparse.ArgumentParser):
@@ -624,6 +687,10 @@ def main(argv):
         '-O', '--path',
         help='output directory for the mirror')
     parser.add_argument(
+        '--layout',
+        help='a custom layout for organizing the files in the target '
+             'directory; use tests as variables, e.g. {domain}')
+    parser.add_argument(
         '--no-link-conversion', action='store_true',
         help='do not modify urls in the local copy in any way')
     parser.add_argument(
@@ -660,11 +727,7 @@ def main(argv):
     namespace = parser.parse_args(argv[1:])
 
     try:
-        output_path = normpath(abspath(namespace.path or 'tracked'))
-        mirror = Mirror(
-            output_path,
-            write_at_once=not namespace.no_live_update,
-            convert_links=namespace.no_link_conversion)
+        mirror = CLIMirror(namespace)
         spider = Spider(CLIRules(namespace), mirror=mirror)
     except RuleError as e:
         print('error: {1}: {0}'.format(*e.args))

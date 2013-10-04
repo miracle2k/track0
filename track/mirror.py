@@ -114,46 +114,21 @@ such a link.
 TODO: Finally, during purging, we might have to do the reverse and
 replace local urls with remote ones.
 """
+import hashlib
 
 import mimetypes
 import os
 from os import path
 from urllib.parse import urlparse
 import itertools
-from track.parser import HTMLParser, get_parser_for_mimetype
+from track.parser import get_parser_for_mimetype
 from track.spider import get_content_type
 
 
-def determine_filename(url, http_response):
-    """Determine the filename under which to store a URL.
-    """
-    parsed = urlparse(url)
-    # TODO: Query string
-
-    # Prefix the domain to the filename
-    filename = path.join(parsed.netloc, parsed.path[1:])
-
-    # If we are dealing with a trailing-slash, create an index.html file
-    # in a directory.
-    if filename.endswith(path.sep):
-        filename = path.join(filename, 'index.html')
-
-    # If we are dealing with a file w/o an extension, add one
-    if not path.splitext(filename)[1]:
-        mime = get_content_type(http_response)
-        # We need to get a list of all possible extensions and pick
-        # on ourselves using sort(), since guess_extension() will
-        # return a different one each time.
-        extensions = mimetypes.guess_all_extensions(mime, strict=False)
-        extensions.sort()
-        if extensions:
-            filename = '{0}{1}'.format(filename, extensions[0])
-
+def safe_filename(filename):
     # No more than 255 bytes per path segment, its rare a filesystem
     # supports more.
-    filename = '/'.join(map(lambda s: s[:255], filename.split('/')))
-
-    return filename
+    return '/'.join(map(lambda s: s[:255], filename.split('/')))
 
 
 class Mirror(object):
@@ -172,6 +147,44 @@ class Mirror(object):
         self.write_at_once = write_at_once
         self.convert_links = convert_links
 
+    def get_filename(self, url, response):
+        """Determine the filename under which to store a URL.
+
+        This is designed for subclasses to be able to provide a custom
+        implementation. They do not need to care about making the
+        filename safe for the filesystem.
+        """
+        url = response.url
+
+        parsed = urlparse(url)
+
+        # Prefix the domain to the filename
+        filename = path.join(parsed.netloc, parsed.path[1:])
+
+        # If we are dealing with a trailing-slash, create an index file
+        # in a directory - extension added later.
+        if filename.endswith(path.sep):
+            filename = path.join(filename, 'index')
+
+        # If we are dealing with a file w/o an extension, add one
+        if not path.splitext(filename)[1]:
+            mime = get_content_type(response)
+            # We need to get a list of all possible extensions and pick
+            # on ourselves using sort(), since guess_extension() will
+            # return a different one each time.
+            extensions = mimetypes.guess_all_extensions(mime, strict=False)
+            extensions.sort()
+            if extensions:
+                filename = '{0}{1}'.format(filename, extensions[0])
+
+        # If there is a query string, insert it before the extension
+        if parsed.query:
+            base, ext = path.splitext(filename)
+            hash = hashlib.md5(parsed.query.encode()).hexdigest().lower()[:10]
+            filename = '{}_{}{}'.format(base, hash, ext)
+
+        return filename
+
     def open(self, filename, mode):
         """Open a file relative to the mirror directory.
         """
@@ -184,8 +197,13 @@ class Mirror(object):
     def add(self, url, response):
         """Store the given page.
         """
+        # Figure out the filename first
+        rel_filename = self.get_filename(url, response)
+        # TODO: Make sure the filename is not outside the cache directory,
+        # avoid issues with servers injecting special path instructions.
+        rel_filename = safe_filename(rel_filename)
+
         # Store the file
-        rel_filename = determine_filename(response.url, response)
         with self.open(rel_filename, 'wb') as f:
             f.write(response.content)
 
