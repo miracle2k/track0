@@ -29,6 +29,10 @@ setup(
         'requests',
         'urlnorm>=1.1.2'
     ],
+    test_requires=[
+        'pytest',
+        'HTTPretty'
+    ],
     entry_points="""[console_scripts]\ntrack = track.cli:run\n"""
 )
 
