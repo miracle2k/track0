@@ -15,7 +15,6 @@ class TestCSSParser(object):
         """, '')
 
         css = list(css)
-        print([u.url for u, _ in css])
 
         assert ['double " in single',
                 "single ' in double",
@@ -23,4 +22,4 @@ class TestCSSParser(object):
                 'import with url',
                 'url with no quotes',
                 'url with single quotes',
-                'url with double quotes'] == [u.url for u, _ in css]
+                'url with double quotes'] == [url for url, _ in css]
