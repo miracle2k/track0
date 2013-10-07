@@ -45,20 +45,6 @@ class Rules(object):
         """
 
 
-class DefaultRules(Rules):
-    """This class controls the spider.
-    """
-
-    def follow(self, url):
-        return True
-
-    def save(self, url):
-        return True
-
-    def stop(self, page):
-        return False
-
-
 class URL(object):
     """A URL to be processed.
 
