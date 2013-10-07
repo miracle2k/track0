@@ -24,7 +24,7 @@ setup(
     url='http://github.com/miracle2k/track',
     license='BSD',
     packages=['track'],
-    instsall_requires=[
+    install_requires=[
         'beautifulsoup4',
         'requests'
     ],
