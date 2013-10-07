@@ -1,7 +1,7 @@
 from collections import deque
 import requests
 from urllib.parse import urlparse
-from requests.exceptions import InvalidSchema, MissingSchema
+from requests.exceptions import InvalidSchema, MissingSchema, ConnectionError
 import urlnorm
 from track.parser import HTMLParser, get_parser_for_mimetype
 
@@ -58,6 +58,10 @@ class URL(object):
         self.requisite = requisite
         self.set_previous(previous)
         self.extra = extra
+
+        # Runtime data
+        self.exception = None
+        self.retries = 0
 
     def set_previous(self, previous):
         """Set the url that is the source for this one.
@@ -127,11 +131,21 @@ class URL(object):
             except (InvalidSchema, MissingSchema):
                 # Urls like xri://, mailto: and the like.
                 self._response = False
+                self.exception = None
+            except ConnectionError as e:
+                self._response = False
+                self.exception = e
             finally:
                 self._response_type = type
 
         return self._response
 
+    def retry(self):
+        self.retries += 1
+        self.exception = None
+        delattr(self, '_response')
+        delattr(self, '_response_type')
+        return self
 
     def __repr__(self):
         return '<URL {0}>'.format(self.url)
@@ -146,6 +160,8 @@ def get_content_type(response):
 class Spider(object):
     """The main spider logic. Continuously download URLs and follow links.
     """
+
+    max_retries = 5
 
     def __init__(self, rules, mirror=None):
         self._url_queue = deque()
@@ -194,7 +210,11 @@ class Spider(object):
         # Download the URL
         self.logger.url(url)
         response = url.resolve('full')
-        if response is None:
+        if response is False:
+            # This request failed at the connection stage
+            if url.retries <= self.max_retries:
+                url = url.retry()
+                self._url_queue.appendleft(url)
             return
 
         # Do not follow errors
