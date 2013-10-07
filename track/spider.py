@@ -2,6 +2,7 @@ from collections import deque
 import requests
 from urllib.parse import urlparse
 from requests.exceptions import InvalidSchema, MissingSchema
+import urlnorm
 from track.parser import HTMLParser, get_parser_for_mimetype
 
 
@@ -66,7 +67,7 @@ class URL(object):
 
     def __init__(self, url, previous=None, source=None, requisite=False,
                  **extra):
-        self.url = url
+        self.url = urlnorm.norm(url)
         self.source = source
         self.requisite = requisite
         self.set_previous(previous)
@@ -194,9 +195,6 @@ class Spider(object):
         url = self._url_queue.pop()
 
         # Do not bother to process the same url twice
-        # TODO: Account for user specificed url not being
-        # in exactly the right format, for example missing
-        # trailing slash.
         if url.url in self._known_urls:
             return
 
@@ -242,7 +240,10 @@ class Spider(object):
             # Put together a url object with all the info that
             # we have ad that tests can use.
             requisite = opts.pop('inline', False)
-            link = URL(link, requisite=requisite, **opts)
+            try:
+                link = URL(link, requisite=requisite, **opts)
+            except urlnorm.InvalidUrl:
+                continue
             link.set_previous(url)
             self._url_queue.appendleft(link)
 

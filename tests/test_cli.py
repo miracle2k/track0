@@ -12,9 +12,10 @@ class TestRules(object):
         assert test('http://example.org/foo/') == 1
 
     def test_path_distance(self):
-        test = lambda a,b: TestImpl.path_distance(URL(a, URL(b)))
+        test = lambda a,b: TestImpl.path_distance(
+            URL('http://example.org%s' % a, URL('http://example.org%s' % b)))
 
-        assert test('http://example.org/foo', 'http://example.com') == False
+        assert test('/foo', '') == False
         assert test('/foo', '/bar') == False
         assert test('/foo', '/foobar') == False
         assert test('/foo', '/foo') == 0
@@ -27,7 +28,6 @@ class TestRules(object):
         test = lambda a: TestImpl.protocol(URL(a))
 
         assert test('http://www.example.org/') == 'http'
-        assert test('mailto:info@example.org') == 'mailto'
 
     def test_port(self):
         test = lambda a: TestImpl.port(URL(a))
