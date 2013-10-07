@@ -1,0 +1,3 @@
+Currently, urls returning error codes are ignored. We might want to implement
+these as implicit default tests, i.e. -code>=400, such that a user may override
+this using +code=404.

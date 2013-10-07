@@ -194,7 +194,11 @@ class Spider(object):
         # Download the URL
         self.logger.url(url)
         response = url.resolve('full')
-        if not response:
+        if response is None:
+            return
+
+        # Do not follow errors
+        if response.status_code >= 400:
             return
 
         # TODO: response.links contains links from http headers. Should we
