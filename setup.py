@@ -31,7 +31,7 @@ setup(
     ],
     test_requires=[
         'pytest',
-        'HTTPretty'
+        'requests-testadapter'
     ],
     entry_points="""[console_scripts]\ntrack = track.cli:run\n"""
 )

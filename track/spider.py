@@ -36,7 +36,7 @@ class Rules(object):
         :meth:`save`.
         """
 
-    def configure_session(self, request):
+    def configure_session(self, session):
         """Allows configuring the general environment.
         """
 
@@ -162,6 +162,7 @@ class Spider(object):
     """
 
     max_retries = 5
+    session_class = requests.Session
 
     def __init__(self, rules, mirror=None):
         self._url_queue = deque()
@@ -176,7 +177,7 @@ class Spider(object):
     @property
     def session(self):
         if not hasattr(self, '_session'):
-            self._session = requests.Session()
+            self._session = self.session_class()
             self.rules.configure_session(self._session)
             self._session.configure_request = self.rules.configure_request
         return self._session
