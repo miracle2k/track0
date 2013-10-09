@@ -193,7 +193,7 @@ For example::
     $ track http://en.wikipedia.org/
         @follow ++original-domain
                 +domain=en.wiktionary.org
-                -depth>0
+                -domain-depth>0
 
 This would mirror all of Wikipedia. Only links that go to a different
 domain than ``en.wikipedia.org`` pass the first test. Those that go
