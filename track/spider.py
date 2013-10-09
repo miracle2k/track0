@@ -133,7 +133,7 @@ class URL(object):
                 # Urls like xri://, mailto: and the like.
                 self._response = False
                 self.exception = None
-            except ConnectionError as e:
+            except (ConnectionError, Timeout) as e:
                 self._response = False
                 self.exception = e
             finally:
