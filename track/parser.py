@@ -136,7 +136,7 @@ class HTMLParser(Parser):
         if not url:
             return
         rel = list(map(lambda s: s.lower(), tag.get('rel', [])))
-        is_inline = rel == ['stylesheet'] or 'icon' in rel   # TODO
+        is_inline = self.is_inline_link_rel(rel)
         yield url, {'inline': is_inline}, (tag, 'href')
 
     def _handle_tag_form(self, tag, opts, **kwargs):
@@ -167,6 +167,15 @@ class HTMLParser(Parser):
             if match:
                 # TODO: replacing this link is harder
                 yield match.groups(0), {}, (tag, 'content')
+
+    @classmethod
+    def is_inline_link_rel(cls, rel):
+        """Check if this rel identifier refers to a link that should
+        be treated as inline. Note that a rel may have multiple values
+        so this must be passed as a list.
+        """
+        assert isinstance(rel, (list, tuple))
+        return rel == ['stylesheet'] or 'icon' in rel
 
 
 class ParserKit:
@@ -330,6 +339,25 @@ class JavasScriptParser(Parser):
     def _parse(self):
         # No parsing JavaScript for now...
         yield from ()
+
+
+class HeaderLinkParser(Parser):
+    """Not a real parser. It just returns the links from the headers
+    of a http response in the same format as other parsers.
+    """
+
+    def __init__(self, response):
+        self.response = response
+        Parser.__init__(self, None, response.url)
+
+    def _get_urls(self):
+        for link in self.response.links.values():
+            opts = {
+                'source': 'http-header',
+                'inline': HTMLParser.is_inline_link_rel(
+                    link.get('rel', '').split(' '))}
+            yield link['url'], opts
+
 
 
 def get_parser_for_mimetype(mimetype):

@@ -95,6 +95,9 @@ def internet(**urls):
 
     The examples are equivalent.
 
+    Returns the actual urls that can be requested. Since there is
+    unfortunately no way to guarantee the order in which the kwargs
+    were specified, they are instead returned in sorted order.
     """
     old_urls = TestAdapter.urls
     try:
@@ -117,11 +120,15 @@ def internet(**urls):
                     'stream': content,
                     'status': code
                 }
+
+            # Final fixes to the data
+            data.setdefault('stream', '')
             if isinstance(data['stream'], str):
                 data['stream'] = data['stream'].encode('utf-8')
+
             final_urls[url] = data
 
         TestAdapter.urls = final_urls
-        yield list(final_urls.keys())
+        yield list(sorted(final_urls.keys()))
     finally:
         TestAdapter.urls = old_urls

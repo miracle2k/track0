@@ -1,9 +1,10 @@
 from collections import deque
+from itertools import chain
 import requests
 from urllib.parse import urlparse
 from requests.exceptions import InvalidSchema, MissingSchema, ConnectionError
 import urlnorm
-from track.parser import HTMLParser, get_parser_for_mimetype
+from track.parser import get_parser_for_mimetype, HeaderLinkParser
 
 
 class Logger(object):
@@ -222,9 +223,6 @@ class Spider(object):
         if response.status_code >= 400:
             return
 
-        # TODO: response.links contains links from http headers. Should we
-        # do something with them?
-
         # Attach a link parser now, which will start to work when needed.
         # The mirror might need the links during save, or the spider when
         # the @stop rules pass. Or we might get away without parsing.
@@ -246,13 +244,16 @@ class Spider(object):
         if self.rules.stop(url):
             return
 
-        # Add all links
-        for link, opts in response.parsed or ():
+        # Add links from the parsed content + the http headers
+        for link, opts in chain(
+                HeaderLinkParser(response),
+                response.parsed or ()):
             # Put together a url object with all the info that
             # we have ad that tests can use.
             requisite = opts.pop('inline', False)
+            source = opts.pop('source', None)
             try:
-                link = URL(link, requisite=requisite, **opts)
+                link = URL(link, requisite=requisite, source=source, **opts)
             except urlnorm.InvalidUrl:
                 continue
             link.set_previous(url)
