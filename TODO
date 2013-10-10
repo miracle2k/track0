@@ -1,3 +1,19 @@
 Currently, urls returning error codes are ignored. We might want to implement
 these as implicit default tests, i.e. -code>=400, such that a user may override
 this using +code=404.
+
+Consider a mode in which all redirects are saved as http-equiv=refresh
+files. Possible via something like "@save +redirect".
+
+Handling redirects: Consider having a mode where the source url (the url
+doing the redirect) does not need to pass @follow. This would however
+entail a HEAD request for every url encountered to determine that it is
+a redirect.
+
+Currently all redirects are saved under the target name. And argument can
+be made that for temporary redirects, the source name should be used. The
+problem is that this would be really unhelpful for things like a
+download.php redirect. Possibly interesting things with looking at mimetpes
+(say: seeing if they are the same) could work.
+
+Think about how to handle content-disposition headers.
