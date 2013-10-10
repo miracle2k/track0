@@ -179,6 +179,7 @@ def internet(**urls):
 
             # Setup some default headers
             data.setdefault('headers', {})
+            data['headers'].setdefault('content-length', len(data['stream']))
             data['headers'].setdefault('content-type', 'text/html')
 
             final_urls[make_url(url)] = data

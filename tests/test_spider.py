@@ -1,10 +1,13 @@
 import pytest
 from .helpers import TestableSpider, MemoryMirror, rules, internet, arglogger
+from track.cli import CLIRules, Script
 
 
 @pytest.fixture(scope='function')
-def spider():
-    spider = TestableSpider(rules(), MemoryMirror())
+def spider(**kwargs):
+    defaults = dict(rules=rules(), mirror=MemoryMirror())
+    defaults.update(kwargs)
+    spider = TestableSpider(**defaults)
     return spider
 
 
@@ -129,7 +132,7 @@ class TestRedirects:
             'http://example.org/qux': dict(links=['foo']),
         }):
             # Setup save rule such that the redirect target, bar,
-            # is not followd and thus not added to the mirror.
+            # is not followed and thus not added to the mirror.
             spider.rules._follow = lambda url: not 'bar' in url.url
 
             spider.add('http://example.org/foo', source=None)
@@ -143,5 +146,31 @@ class TestRedirects:
                 assert b'"http://example.org/bar"' in content
             else:
                 assert b'"http://example.org/foo"' in content
+
+    def test_filters(self, spiderfactory):
+        """Test how certain filters behave with redirects.
+        """
+        with internet(**{
+            'http://example.org/foo': dict(
+                    status=302,
+                    headers={'Location': 'http://example.org/bar'}),
+            'http://example.org/bar': dict(headers={'content-length': 5*1024*1024*1024})
+        }):
+            args = Script.get_default_namesspace()
+            args.follow = ['-', '+size>1m']
+
+            # Make a CLIRules instance that uses the test internet
+            cli_rules = CLIRules(args)
+            cli_rules.configure_session = lambda s: rules.configure_session(cli_rules, s)
+
+            spider = spiderfactory(rules=cli_rules)
+
+            spider.add('http://example.org/foo', source=None)
+            spider.loop()
+
+            # The redirect was followed despite the redirecting url not
+            # matching the size filter
+            assert len(spider.mirror.urls) == 1
+
 
 

@@ -9,6 +9,12 @@ from track.mirror import Mirror
 from track.spider import Spider, Rules, get_content_type
 
 
+class Redirect(Exception):
+    """A test that detects a redirect and for this reason knows it cannot
+    provide the right value would raise this.
+    """
+
+
 class TestImpl(object):
 
     @staticmethod
@@ -293,6 +299,8 @@ class TestImpl(object):
         response = url.resolve('head')
         if not response:
             return None
+        if response.redirects:
+            raise Redirect()
         length = response.headers.get('content-length', None)
         if length is None:
             response = url.resolve('full')
@@ -552,11 +560,23 @@ class CLIRules(Rules):
         # TODO: Optimization is particularily important since some rules
         # cause a HEAD request, or worse, a full download.
         for (action, is_stop_action), test, op, value in rules:
-            passes = self._run_test(test, op, value, url)
-            if passes:
-                result = action
-                if is_stop_action:  # ++ or --
-                    break
+            try:
+                passes = self._run_test(test, op, value, url)
+                if passes:
+                    result = action
+                    if is_stop_action:  # ++ or --
+                        break
+            except Redirect:
+                # If the test can't provide value to to the redirect,
+                # evaluate the whole thing to "allow". We don't want
+                # this single rule element to stand in the way of
+                # following the redirect, the test will run again against
+                # the proper url. This approach will do the right thing
+                # for all cases:
+                #   -size>1m -domain=foo.*
+                #   +size>1m -domain=foo.*
+                #   --size<3m +
+                result = True
         return result
 
     def follow(self, url):
@@ -683,74 +703,114 @@ class MyArgumentParser(argparse.ArgumentParser):
         return super(MyArgumentParser, self)._parse_optional(arg_string)
 
 
+class Script:
+
+    @classmethod
+    def build_argument_parser(cls, prog=None):
+        parser = MyArgumentParser(prog, prefix_chars='-@')
+        # Affecting the local mirror
+        parser.add_argument(
+            '-O', '--path',
+            help='output directory for the mirror')
+        parser.add_argument(
+            '--layout',
+            help='a custom layout for organizing the files in the target '
+                 'directory; use tests as variables, e.g. {domain}')
+        parser.add_argument(
+            '--no-link-conversion', action='store_true',
+            help='do not modify urls in the local copy in any way')
+        parser.add_argument(
+            '--no-live-update', action='store_true',
+            help='delay local mirror modifications until the spider is done')
+        # Affecting the start urls
+        parser.add_argument(
+            '-F', '--from-file', action='append', metavar='FILE',
+            help='Add urls from the file, one per line; can be given multiple times')
+        parser.add_argument(
+            'url', nargs='*', metavar='url',
+            help='urls to be added to the queue initially as a starting point')
+        # Affecting the parsing process
+        parser.add_argument(
+            '-u', '--user-agent',
+            help="user agent string to use; the special values 'firefox', "
+                 "'safari', 'chrome', 'ie' are recognized")
+
+        parser.add_argument(
+            '@follow', nargs='+', metavar='rule', default=['-', '+requisite'],
+            help="rules that determine whether a url will be downloaded; default"
+                 "is '- _requisite', meaning only the url itself and it's assets"
+                 "are followed")
+        parser.add_argument(
+            '@save', nargs='+', metavar='rule', default=['+'],
+            help="rules that determine whether a url will be saved; default "
+                 "rule is '+', meaning everything that passes @follow is "
+                 "saved")
+        parser.add_argument(
+            '@stop', nargs='+', metavar= 'rule', default=['-'],
+            help="rarely needed: rules that prevent a url from being analyzed"
+                 "for further links; default rule is '-' (never stop)")
+
+        return parser
+
+    @classmethod
+    def get_default_namesspace(cls, **set):
+        """Return an argparse namespace instance with empty attributes
+        for all of our command line arguments. This is useful for
+        interacting with the CLI classes in code.
+        """
+        parser = cls.build_argument_parser()
+
+        # copied from argparse.py
+        namespace = argparse.Namespace()
+
+        # add any action defaults that aren't present
+        for action in parser._actions:
+            if action.dest is not argparse.SUPPRESS:
+                if not hasattr(namespace, action.dest):
+                    if action.default is not argparse.SUPPRESS:
+                        setattr(namespace, action.dest, action.default)
+
+        # add any parser defaults that aren't present
+        for dest in parser._defaults:
+            if not hasattr(namespace, dest):
+                setattr(namespace, dest, parser._defaults[dest])
+
+        # add user values
+        for key, value in set.items():
+            setattr(namespace, key, value)
+
+        return namespace
+
+    def main(self, argv):
+        parser = self.build_argument_parser(argv[0])
+        namespace = parser.parse_args(argv[1:])
+
+        try:
+            mirror = CLIMirror(namespace)
+            spider = Spider(CLIRules(namespace), mirror=mirror)
+        except RuleError as e:
+            print('error: {1}: {0}'.format(*e.args))
+            return
+
+        # Add the urls specified at the command line
+        for url in namespace.url:
+            spider.add(url)
+
+        # Load urls from additional files specified
+        for filename in namespace.from_file or ():
+            with open(filename, 'r') as f:
+                for url in f.readlines():
+                    spider.add(url.strip())
+
+        if not len(spider):
+            parser.print_usage()
+            print('error: I need at least one url to start with')
+            return
+        spider.loop()
+
+
 def main(argv):
-    parser = MyArgumentParser(argv[0], prefix_chars='-@')
-    # Affecting the local mirror
-    parser.add_argument(
-        '-O', '--path',
-        help='output directory for the mirror')
-    parser.add_argument(
-        '--layout',
-        help='a custom layout for organizing the files in the target '
-             'directory; use tests as variables, e.g. {domain}')
-    parser.add_argument(
-        '--no-link-conversion', action='store_true',
-        help='do not modify urls in the local copy in any way')
-    parser.add_argument(
-        '--no-live-update', action='store_true',
-        help='delay local mirror modifications until the spider is done')
-    # Affecting the start urls
-    parser.add_argument(
-        '-F', '--from-file', action='append', metavar='FILE',
-        help='Add urls from the file, one per line; can be given multiple times')
-    parser.add_argument(
-        'url', nargs='*', metavar='url',
-        help='urls to be added to the queue initially as a starting point')
-    # Affecting the parsing process
-    parser.add_argument(
-        '-u', '--user-agent',
-        help="user agent string to use; the special values 'firefox', "
-             "'safari', 'chrome', 'ie' are recognized")
-
-    parser.add_argument(
-        '@follow', nargs='+', metavar='rule', default=['-', '+requisite'],
-        help="rules that determine whether a url will be downloaded; default"
-             "is '- _requisite', meaning only the url itself and it's assets"
-             "are followed")
-    parser.add_argument(
-        '@save', nargs='+', metavar='rule', default=['+'],
-        help="rules that determine whether a url will be saved; default "
-             "rule is '+', meaning everything that passes @follow is "
-             "saved")
-    parser.add_argument(
-        '@stop', nargs='+', metavar= 'rule', default=['-'],
-        help="rarely needed: rules that prevent a url from being analyzed"
-             "for further links; default rule is '-' (never stop)")
-
-    namespace = parser.parse_args(argv[1:])
-
-    try:
-        mirror = CLIMirror(namespace)
-        spider = Spider(CLIRules(namespace), mirror=mirror)
-    except RuleError as e:
-        print('error: {1}: {0}'.format(*e.args))
-        return
-
-    # Add the urls specified at the command line
-    for url in namespace.url:
-        spider.add(url)
-
-    # Load urls from additional files specified
-    for filename in namespace.from_file or ():
-        with open(filename, 'r') as f:
-            for url in f.readlines():
-                spider.add(url.strip())
-
-    if not len(spider):
-        parser.print_usage()
-        print('error: I need at least one url to start with')
-        return
-    spider.loop()
+    Script().main(argv)
 
 
 def run():
