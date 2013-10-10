@@ -390,8 +390,8 @@ class OperatorImpl:
         if isinstance(system_value, numbers.Number):
             # If a prefix is attached, resolve it
             unit = None
-            if user_value and user_value[-1] in UNITS:
-                user_value, unit = user_value[:-1], user_value[-1]
+            if user_value and user_value[-1].upper() in UNITS:
+                user_value, unit = user_value[:-1], user_value[-1].upper()
             try:
                 user_value = float(user_value)
             except ValueError:

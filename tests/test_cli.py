@@ -82,6 +82,7 @@ class TestOperators(object):
 
         assert OperatorImpl.smaller(800, '1K') is True
         assert OperatorImpl.smaller(1200, '1K') is False
+        assert OperatorImpl.smaller(800, '1k') is True
 
     def test_string(self):
         assert OperatorImpl.equality('foo', 'foo') is True
