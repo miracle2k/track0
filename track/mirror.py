@@ -135,19 +135,19 @@ class Mirror(object):
     """Have local copy of one or multiple urls.
     """
 
-    # maps urls in the mirror to the local filenames
-    urls = {}
-    # the redirects that we know about
-    redirects = {}
-    # stores extra data like etags and mimetypes.
-    url_info = {}
-    # maps which urls are referenced by which other urls.
-    url_usage = {}
-
     def __init__(self, directory, write_at_once=True, convert_links=True):
         self.directory = directory
         self.write_at_once = write_at_once
         self.convert_links = convert_links
+
+        # maps urls in the mirror to the local filenames
+        self.urls = {}
+        # the redirects that we know about
+        self.redirects = {}
+        # stores extra data like etags and mimetypes.
+        self.url_info = {}
+        # maps which urls are referenced by which other urls.
+        self.url_usage = {}
 
     def get_filename(self, url, response):
         """Determine the filename under which to store a URL.
