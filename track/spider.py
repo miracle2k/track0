@@ -2,7 +2,7 @@ from collections import deque
 from itertools import chain
 import requests
 from urllib.parse import urlparse
-from requests.exceptions import InvalidSchema, MissingSchema, ConnectionError
+from requests.exceptions import InvalidSchema, MissingSchema, ConnectionError, Timeout
 import urlnorm
 from track.parser import get_parser_for_mimetype, HeaderLinkParser
 
