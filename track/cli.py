@@ -299,6 +299,9 @@ class TestImpl(object):
             if not response:
                 return None
             length = response.headers.get('content-length', None)
+            if not length:
+                # Force downloading the content
+                length = len(response.content)
         return length
 
 
