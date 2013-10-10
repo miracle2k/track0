@@ -137,6 +137,8 @@ class Mirror(object):
 
     # maps urls in the mirror to the local filenames
     urls = {}
+    # the redirects that we know about
+    redirects = {}
     # stores extra data like etags and mimetypes.
     url_info = {}
     # maps which urls are referenced by which other urls.
@@ -227,6 +229,14 @@ class Mirror(object):
             self._convert_links(response.url)
             self._create_index()
 
+    def add_redirect(self, url, target_url, code):
+        """Register a redirect.
+
+        Will make sure that any links pointing to ``url`` can be rewritten
+        to the file behind ``target_url``.
+        """
+        self.redirects[url.url] = (code, target_url.url)
+
     def finish(self):
         self._convert_links()
         self._create_index()
@@ -272,11 +282,25 @@ class Mirror(object):
             parsed = parser_class(f.read(), url)
 
             def replace_link(url):
-                # We have a copy of this
+                # See what we know about this link. Is the target url
+                # saved locally? Is it a known redirect?
+                local_filename = redir_url = redir_code = None
                 if url in self.urls:
-                    target_filename = self.urls[url]
-                    rel_link = path.relpath(target_filename, path.dirname(file))
+                    local_filename = self.urls[url]
+                else:
+                    if url in self.redirects:
+                        redir_code, redir_url = self.redirects[url]
+                        if redir_url in self.urls:
+                            local_filename = self.urls[redir_url]
+
+                # We have the document behind this link available locally
+                if local_filename:
+                    rel_link = path.relpath(local_filename, path.dirname(file))
                     return './{0}'.format(rel_link)
+
+                # It is a permanent redirect, use the redirect target
+                elif redir_url and redir_code == 301:
+                    return redir_url
 
                 else:
                     # We do not have a local copy. The url has already

@@ -212,6 +212,59 @@ that url will be followed.
 The key is that it runs after ``@save``, while ``@follow`` runs before.
 
 
+Redirects
+~~~~~~~~~
+
+If a url redirects to a different location, the redirect target needs to
+pass the ``@follow`` rule. That is in addition to the url that does the
+redirecting, which needs to pass at least those tests that run before the
+redirect is detected.
+
+For example, a ``+original-domain`` test needs to pass both urls. A
+``+size>100k`` test only needs to pass the target url: Clearly, it wouldn't
+make much sense to require the redirect itself to be large. The same thing
+is true for tests like ``content`` or ``content-type``.
+
+The local copy in the mirror will always be saved under a filename
+representing the target url.
+
+.. note::
+    If there is more than a single redirect in a chain, only the final url
+    needs to pass the rules: For example, if you filter by domain, presumably
+    you will not be bothered if a redirect takes a round trip through a
+    different domain; its the final document that matters.
+
+track also deals with a special case where a url is known to be a redirect,
+but is not saved to the local mirror, presumably because the ``@save``
+rule did not match. If the url was using a permanent redirect with status
+code ``301``, links to that url will be replaced with a link to the target
+location instead.
+
+Let's look at a example. Say a page has as a link like this::
+
+    http://feedproxy.google.com/~rFooBar/~3/2fdgmfhHu1k/
+
+Redirecting, using a 301 permanent redirect, to the real address::
+
+    http://example.org/blog-entry.html
+
+If you have configured the spider to not follow urls to ``example.org``,
+the local mirror will still rewrite links to point directly to
+``http://example.org``.
+
+In a different case, you might have a url like this::
+
+    http://example.org/download.php?file=foobar
+
+using a temporary redirect to::
+
+    http://example.org/data/foobar.zip
+
+In this case, the local mirror will contain the link to the ``download.php``
+file; the download generator will remain intact, rather than linking to
+the internal file.
+
+
 Other recipes
 -------------
 

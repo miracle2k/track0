@@ -61,6 +61,8 @@ class URL(object):
         self.extra = extra
 
         # Runtime data
+        self.session = None
+        self.response = None
         self.exception = None
         self.retries = 0
 
@@ -119,33 +121,65 @@ class URL(object):
             raise TypeError(
                 'This URL instance has no session, cannot resolve().')
 
-        # TODO: We can optimize this further, no need to try a full
-        # request if the head already returned an error. We might also
-        # just try to raise the error all the way through the rule handling.
-        if not hasattr(self, '_response') or (
-                getattr(self, '_response_type') == 'head' and type == 'full'):
-            try:
-                method = 'GET' if type=='full' else 'HEAD'
-                request = requests.Request(method, self.url).prepare()
-                self.session.configure_request(request, self)
-                self._response = self.session.send(request)
-            except (InvalidSchema, MissingSchema):
-                # Urls like xri://, mailto: and the like.
-                self._response = False
-                self.exception = None
-            except (ConnectionError, Timeout) as e:
-                self._response = False
-                self.exception = e
-            finally:
-                self._response_type = type
+        # TODO: Consider just raising the error all the way through
+        # the rule handling.
 
-        return self._response
+        # If we have already tried to resolve this url and there was an
+        # error, don't bother again; that is, we skip the
+        # upgrade-HEAD-to-GET logic.
+        if (self.response and not self.response.ok) or self.exception:
+            return self.response
+
+        # Skip if the previous request is sufficient for the requested type
+        # (i.e. not a HEAD response when we are asking for a full GET)
+        if self.response is not None and (
+                    self.response.request.method != 'HEAD' or type=='head'):
+            return self.response
+
+        try:
+            method = 'GET' if type == 'full' else 'HEAD'
+            request = requests.Request(method, self.url).prepare()
+            self.session.configure_request(request, self)
+
+            response = self.session.send(
+                request,
+                # If the url is not saved and not a document, we don't
+                # need to access the content. The question is:
+                # TODO: Is it better to close() or to keep-alive?
+                # This also affects redirects handling, if we don't close
+                # we can't use the same connection to resolve redirects.
+                stream=False,  # method=='GET'
+                # Handle redirects manually
+                allow_redirects=False)
+
+            redirects = self.session.resolve_redirects(
+                response, request,
+                # Important: We do NOT fetch the body of the final url
+                # (and hopefully `resolve_redirects` wouldn't waste any
+                # time on a large intermediary url either). This is because
+                # at this time we only care about the final url. If this
+                # url is not to be processed, we will not have wasted
+                # bandwidth.
+                # TODO: Consider doing the redirect resolving using HEAD.
+                stream=False)
+
+            response.redirects = list(redirects)
+
+            self.response = response
+        except (InvalidSchema, MissingSchema):
+            # Urls like xri://, mailto: and the like.
+            self.response = False
+            self.exception = None
+        except (ConnectionError, Timeout) as e:
+            self.response = False
+            self.exception = e
+
+        return self.response
 
     def retry(self):
         self.retries += 1
         self.exception = None
-        delattr(self, '_response')
-        delattr(self, '_response_type')
+        self.response = None
         return self
 
     def __repr__(self):
@@ -183,10 +217,12 @@ class Spider(object):
             self._session.configure_request = self.rules.configure_request
         return self._session
 
-    def add(self, url):
+    def add(self, url, **kwargs):
         """Add a new URL to be processed.
         """
-        url_obj = URL(url, previous=None, source='user')
+        opts = dict(previous=None, source='user')
+        opts.update(kwargs)
+        url_obj = URL(url, **opts)
         self._url_queue.appendleft(url_obj)
 
     def loop(self):
@@ -217,6 +253,22 @@ class Spider(object):
             if url.retries <= self.max_retries:
                 url = url.retry()
                 self._url_queue.appendleft(url)
+            return
+
+        # If we have been redirected to a different url, add that
+        # url to the queue again.
+        if response.redirects:
+            redir_url = URL(
+                response.redirects[-1].url, previous=url.previous,
+                source=url.source, requisite=url.requisite, **url.extra)
+            self._url_queue.append(redir_url)
+            response.close()
+
+            # The mirror needs to know about the redirect. The status
+            # code if the first redirect in a chain determines the type
+            # (i.e. permanent, temporary etc)
+            self.mirror.add_redirect(
+                url, redir_url, response.status_code)
             return
 
         # Do not follow errors
