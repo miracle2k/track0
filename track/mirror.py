@@ -123,7 +123,7 @@ import shelve
 from urllib.parse import urlparse
 import itertools
 from track.parser import get_parser_for_mimetype
-from track.spider import get_content_type
+from track.spider import get_content_type, URL
 
 
 def safe_filename(filename):
@@ -396,6 +396,9 @@ class Mirror(object):
             parsed = parser_class(f.read(), url)
 
             def replace_link(url):
+                # Abuse the URL class to normalize the url for matching
+                url = URL(url).url
+
                 # See what we know about this link. Is the target url
                 # saved locally? Is it a known redirect?
                 local_filename = redir_url = redir_code = None
