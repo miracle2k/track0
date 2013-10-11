@@ -721,7 +721,8 @@ class Script:
         parser = MyArgumentParser(prog, prefix_chars='-@')
         # 1. We are only providing short-hand arguments for the most
         #    important arguments. For others, the readability of a long
-        #    option is preferred.
+        #    option is preferred. This is part of what makes httrack
+        #    so hard to understand.
         # 2. short options use uppercase if they are significant
         #    environment-setup type options (like output path) as opposed
         #    to behaviour details (like the user agent).
@@ -756,7 +757,7 @@ class Script:
             help='urls to be added to the queue initially as a starting point')
         # Affecting the parsing process
         parser.add_argument(
-            '-u', '--user-agent',
+            '--user-agent',
             help="user agent string to use; the special values 'firefox', "
                  "'safari', 'chrome', 'ie' are recognized")
 
