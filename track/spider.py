@@ -1,7 +1,7 @@
 from collections import deque
 from itertools import chain
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urldefrag
 from requests.exceptions import InvalidSchema, MissingSchema, ConnectionError, Timeout
 import urlnorm
 from track.parser import get_parser_for_mimetype, HeaderLinkParser
@@ -67,7 +67,23 @@ class Link(object):
     """
 
     def __init__(self, url, previous=None, **info):
-        self.url = urlnorm.norm(url)
+        # Normalize the url. This means case-sensitivity, and a whole
+        # lot of other things that the urlnorm library will do for us.
+        # It does also mean lossy operations though: The link may
+        # contain an anchor; we need to maintain this anchor when we
+        # put the url inside a locally saved copy, but we do not want
+        # it to interfere with duplicate detection.
+        self.original_url = urlnorm.norm(url)
+
+        # For the normalized url that we'll be exposing, remove the
+        # fragment, and treat https and http the same.
+        url, fragment = urldefrag(self.original_url)
+        self.lossy_url_data = {'fragment': fragment}
+        if url.startswith('https:'):
+            url = 'http' + url[5:]
+            self.lossy_url_data = {'protocol': 'https'}
+        self.url = url
+
         self.set_previous(previous)
         self.info = info
 
@@ -110,7 +126,7 @@ class Link(object):
     @property
     def parsed(self):
         if not hasattr(self, '_parsed'):
-            self._parsed = urlparse(self.url)
+            self._parsed = urlparse(self.original_url)
         return self._parsed
 
     def resolve(self, type, etag=None, last_modified=None):

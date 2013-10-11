@@ -397,7 +397,8 @@ class Mirror(object):
 
             def replace_link(url):
                 # Abuse the URL class to normalize the url for matching
-                url = Link(url).url
+                link = Link(url)
+                url = link.url
 
                 # See what we know about this link. Is the target url
                 # saved locally? Is it a known redirect?
@@ -413,6 +414,8 @@ class Mirror(object):
                 # We have the document behind this link available locally
                 if local_filename:
                     rel_link = path.relpath(local_filename, path.dirname(file))
+                    if link.lossy_url_data.get('fragment'):
+                        rel_link += '#' + link.lossy_url_data['fragment']
                     return './{0}'.format(rel_link)
 
                 # It is a permanent redirect, use the redirect target

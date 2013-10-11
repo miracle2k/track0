@@ -16,17 +16,51 @@ def spiderfactory():
     return spider
 
 
-def test_normalize_url(spider):
-    # Trailing slash
-    spider.add('http://elsdoerfer.name')
-    url = spider._link_queue.pop()
-    assert url.url == 'http://elsdoerfer.name/'
-    assert url.parsed.path == '/'
+class TestNormalizeUrl:
 
-    # Case-sensitive hostname, default port
-    spider.add('HTTP://elsdoerFER.NaME:80')
-    url = spider._link_queue.pop()
-    assert url.url == 'http://elsdoerfer.name/'
+    def test_lossless(self, spider):
+        # Trailing slash
+        spider.add('http://elsdoerfer.name')
+        link = spider._link_queue.pop()
+        assert link.url == 'http://elsdoerfer.name/'
+        assert link.parsed.path == '/'
+
+        # Case-sensitive hostname, default port
+        spider.add('HTTP://elsdoerFER.NaME:80')
+        link = spider._link_queue.pop()
+        assert link.url == 'http://elsdoerfer.name/'
+
+        # Empty query string
+        spider.add('http://elsdoerfer.name/?')
+        link = spider._link_queue.pop()
+        assert link.url == 'http://elsdoerfer.name/'
+
+    def test_lossy(self, spider):
+        """These are normalizations that must be restored when a
+        url is outputted to the mirror.
+        """
+        # Fragments
+        spider.add('HTTP://elsdoerfer.name/#foo')
+        link = spider._link_queue.pop()
+        assert link.url == 'http://elsdoerfer.name/'
+        assert link.original_url == 'http://elsdoerfer.name/#foo'
+
+        # https
+        spider.add('https://elsdoerfer.name/')
+        link = spider._link_queue.pop()
+        assert link.url == 'http://elsdoerfer.name/'
+
+    def test_lossy_normalizations_in_mirror(self, spider):
+        with internet(**{
+            'bar': dict(stream='<a href="/foo#some-fragment"></a>'),
+            'foo': dict(),
+        }) as uris:
+            spider.add(uris[0])
+            spider.loop()
+
+            # the local link contains the fragment
+            content = spider.mirror.get_file(uris[0])
+            assert b'"./foo.htm#some-fragment"' in content
 
 
 def test_error_code(spider):
