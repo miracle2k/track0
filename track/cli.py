@@ -20,7 +20,7 @@ class Redirect(Exception):
 class TestImpl(object):
 
     @staticmethod
-    def default(url):
+    def default(link):
         """Special case for +/- defaults without test name.
         """
         return True
@@ -34,10 +34,10 @@ class TestImpl(object):
         return url.info.get('inline', False)
 
     @staticmethod
-    def depth(url):
-        """Tests the depth of the url within the discovery process. A
-        starting url has a depth of 0, a link found within that
-        starting url has a depth of 1, links found on that second page
+    def depth(link):
+        """Tests the depth of the link within the discovery process. A
+        starting link has a depth of 0, a link found within that
+        starting link has a depth of 1, links found on that second page
         have a depth of 2.
 
         Note that you need to test using comparison operators. To go
@@ -53,10 +53,10 @@ class TestImpl(object):
         following three previous links, and without other rules you would
         never get that far.
         """
-        return url.depth
+        return link.depth
 
     @staticmethod
-    def domain_depth(url):
+    def domain_depth(link):
         """This is like "depth" except that the counter resets after
         the domain changes while spidering. For example::
 
@@ -64,12 +64,12 @@ class TestImpl(object):
 
         Will download the first page of every external link on the page,
         but will not follow any internal links (where the depth would be
-        1 for the first link found on a starting url).
+        1 for the first link found on a starting link).
         """
-        return url.domain_depth
+        return link.domain_depth
 
     @staticmethod
-    def original_domain(url):
+    def original_domain(link):
         """Passes urls that are on the same domain as the root url which
         was the starting point for the discovery of this url.
 
@@ -78,10 +78,10 @@ class TestImpl(object):
         ``a.com`` discovers ``b.com/foo`` before ``b.com`` itself does,
         the url *will* be followed the second time around.
         """
-        return url.parsed.netloc == url.root.parsed.netloc
+        return link.parsed.netloc == link.root.parsed.netloc
 
     @staticmethod
-    def same_domain(url):
+    def same_domain(link):
         """Passes urls that are on the same domain as the previous url
         where they were found.
 
@@ -96,12 +96,12 @@ class TestImpl(object):
         once a <link> tag leads to a different domain, further links
         on that domain are followed as well.
         """
-        if not url.previous:
+        if not link.previous:
             return True
-        return url.parsed.netloc == url.previous.parsed.netloc
+        return link.parsed.netloc == link.previous.parsed.netloc
 
     @staticmethod
-    def down(url):
+    def down(link):
         """Passes urls that are further down the path hierarchy than
         the starting point. For example, given this command::
 
@@ -118,10 +118,10 @@ class TestImpl(object):
             control, like controlling how deep to go. It even allows
             going upwards.
         """
-        return TestImpl.path_distance_to_original(url) >= 0
+        return TestImpl.path_distance_to_original(link) >= 0
 
     @staticmethod
-    def path_level(url):
+    def path_level(link):
         """Test the depth of the path of an url.
 
         The path level of ``http:/example.org/`` is 0, the path level of
@@ -133,10 +133,10 @@ class TestImpl(object):
         This is not to be confused with the "depth" test which checks the
         depth of the spidering process.
         """
-        return len(url.parsed.path.split('/')) - 2
+        return len(link.parsed.path.split('/')) - 2
 
     @staticmethod
-    def path_distance(url):
+    def path_distance(link):
         """The path distance is the difference in the values as returned
         by ``path-level`` between the url, and the previous one::
 
@@ -152,13 +152,13 @@ class TestImpl(object):
         a distance between two urls on different domains. The test will
         never pass in such cases.
         """
-        # Short-circuit root urls
-        if url.previous is None:
+        # Short-circuit root links
+        if link.previous is None:
             return 0
-        return TestImpl._path_distance(url, url.previous)
+        return TestImpl._path_distance(link, link.previous)
 
     @staticmethod
-    def path_distance_to_original(url):
+    def path_distance_to_original(link):
         """Like ``path-distance``, but tests the difference between the
         url and the original root url that was the starting point.
 
@@ -171,19 +171,19 @@ class TestImpl(object):
 
             @follow +down
         """
-        # Short-circuit root urls
-        if url.previous is None:
+        # Short-circuit root links
+        if link.previous is None:
             return 0
-        return TestImpl._path_distance(url, url.root)
+        return TestImpl._path_distance(link, link.root)
 
     @staticmethod
-    def _path_distance(url1, url2):
+    def _path_distance(link1, link2):
         # Test never passes if the domains have changed
-        if url1.parsed.netloc != url2.parsed.netloc:
+        if link1.parsed.netloc != link2.parsed.netloc:
             return False
 
-        source = url2.parsed.path.split('/')
-        this = url1.parsed.path.split('/')
+        source = link2.parsed.path.split('/')
+        this = link1.parsed.path.split('/')
         shared = commonprefix([source, this])
 
         # /foo and /bar also will never pass
@@ -193,30 +193,30 @@ class TestImpl(object):
         return len(this) - len(source)
 
     @staticmethod
-    def url(url):
+    def url(link):
         """Match against the full url, including query string.
         """
-        return url.url
+        return link.url
 
     @staticmethod
-    def protocol(url):
+    def protocol(link):
         """Match against the protocol of the url.
 
         This will be something like ``http`` or ``https``.
         """
-        return url.parsed.scheme
+        return link.parsed.scheme
 
     @staticmethod
-    def domain(url):
+    def domain(link):
         """Match against the domain part of the url.
 
         For example, if the url is ``http://www.apple.com/iphone/``,
         then the domain will be ``http://www.apple.com``.
         """
-        return url.parsed.netloc
+        return link.parsed.netloc
 
     @staticmethod
-    def port(url):
+    def port(link):
         """Match against the port of the url.
 
         For example, if the url is ``http://example.org:8080``, the port
@@ -225,10 +225,10 @@ class TestImpl(object):
 
         If the url does not specify a port, ``80`` is used.
         """
-        return url.parsed.port or 80
+        return link.parsed.port or 80
 
     @staticmethod
-    def path(url):
+    def path(link):
         """Match against the path part of the url.
 
         For example, if the url is ``http://www.apple.com/iphone/``,
@@ -237,10 +237,10 @@ class TestImpl(object):
         """
         # "http://example.org" would return an empty string, do not
         # let that happen.
-        return url.parsed.path or '/'
+        return link.parsed.path or '/'
 
     @staticmethod
-    def filename(url):
+    def filename(link):
         """Match against the filename of a url.
 
         For example, if the url is ``http://example.org/foo/index.html``,
@@ -250,10 +250,10 @@ class TestImpl(object):
         empty. If the url is ``http://example.org/foo`` the filename will
         be ``foo``.
         """
-        return basename(url.parsed.path)
+        return basename(link.parsed.path)
 
     @staticmethod
-    def extension(url):
+    def extension(link):
         """Match against the file extension.
 
         For example, if the url is ``http://example.org/foo/index.html``,
@@ -261,19 +261,19 @@ class TestImpl(object):
 
         If there is no file extension, this test will match an empty string.
         """
-        return splitext(basename(url.parsed.path))[1][1:]
+        return splitext(basename(link.parsed.path))[1][1:]
 
     @staticmethod
-    def querystring(url):
+    def querystring(link):
         """Match against the query string.
 
         For example, if the url is ``http://example.org/foo/?page=2&user=1``,
         the querystring will be ``page=2&user=1``.
         """
-        return url.parsed.query
+        return link.parsed.query
 
     @staticmethod
-    def size(url):
+    def size(link):
         """Test the size of the document behind a url.
 
         You may use K, M or G as units::
@@ -284,14 +284,14 @@ class TestImpl(object):
         the size. If the HEAD request does not include information about
         the size, the full url needs to be fetched.
         """
-        response = url.resolve('head')
+        response = link.resolve('head')
         if not response:
             return None
         if response.redirects:
             raise Redirect()
         length = response.headers.get('content-length', None)
         if length is None:
-            response = url.resolve('full')
+            response = link.resolve('full')
             if not response:
                 return None
             length = response.headers.get('content-length', None)
@@ -302,7 +302,7 @@ class TestImpl(object):
 
 
     @staticmethod
-    def content_type(url):
+    def content_type(link):
         """Match against the content type of the url.
 
         A content type might be ``text/html`` or ``image/png``.
@@ -310,24 +310,24 @@ class TestImpl(object):
         Note: This will execute a HEAD request to the url to determine
         the content type.
         """
-        response = url.resolve('head')
+        response = link.resolve('head')
         if not response:
             return None
         return get_content_type(response)
 
     @staticmethod
-    def content(url):
+    def content(link):
         """Match against the content of the url.
 
         Careful! This test requires a url to be downloaded in full .
         """
-        response = url.resolve('full')
+        response = link.resolve('full')
         if not response:
             return None
         return response.text
 
     @staticmethod
-    def tag(url):
+    def tag(link):
         """The tag and attribute where the url was found.
 
         For example, if the spider followed a standard link, this would
@@ -336,7 +336,7 @@ class TestImpl(object):
 
         If the link was not found in a tag, this matches an empty string.
         """
-        return url.extra.get('tag', '')
+        return link.extra.get('tag', '')
 
 
 AvailableTests = {
@@ -532,13 +532,13 @@ class CLIRules(Rules):
             return getattr(test, name, None)
         return test
 
-    def _run_test(self, test, op, value, url):
+    def _run_test(self, test, op, value, link):
         """Run a test, return True or False.
         """
-        test_result = test(url)
+        test_result = test(link)
         return Operators[op](test_result, value)
 
-    def _apply_rules(self, rules, url):
+    def _apply_rules(self, rules, link):
         result = self.rule_default
         # We are are simply processing the rules from left to right, but
         # since the right-most rules take precedence, it would be smarter
@@ -549,7 +549,7 @@ class CLIRules(Rules):
         # cause a HEAD request, or worse, a full download.
         for (action, is_stop_action), test, op, value in rules:
             try:
-                passes = self._run_test(test, op, value, url)
+                passes = self._run_test(test, op, value, link)
                 if passes:
                     result = action
                     if is_stop_action:  # ++ or --
@@ -567,14 +567,14 @@ class CLIRules(Rules):
                 result = True
         return result
 
-    def follow(self, url):
-        return self._apply_rules(self.follow_rules, url)
+    def follow(self, link):
+        return self._apply_rules(self.follow_rules, link)
 
-    def save(self, url):
-        return self._apply_rules(self.save_rules, url)
+    def save(self, link):
+        return self._apply_rules(self.save_rules, link)
 
-    def stop(self, url):
-        return self._apply_rules(self.stop_rules, url)
+    def stop(self, link):
+        return self._apply_rules(self.stop_rules, link)
 
     def configure_session(self, session):
         user_agent = UserAgents.get(
@@ -594,7 +594,7 @@ class URLFormatter(string.Formatter):
     """
 
     def get_field(self, field_name, args, kwargs):
-        url = args[0]
+        link = args[0]
 
         # Parse the field name for filters. We can't use the standard
         # Python format() format and convert specs etc. because they
@@ -603,7 +603,7 @@ class URLFormatter(string.Formatter):
 
         # Run the test for the value
         test = CLIRules.get_test(field_name)
-        value = test(url)
+        value = test(link)
 
         # Normalize test result
         if value is None:
@@ -647,10 +647,10 @@ class CLIMirror(Mirror):
         self.layout = namespace.layout
         self._url_formatter = URLFormatter()
 
-    def get_filename(self, url, response):
+    def get_filename(self, link, response):
         if self.layout:
-            return self._url_formatter.format(self.layout, url)
-        return Mirror.get_filename(self, url, response)
+            return self._url_formatter.format(self.layout, link)
+        return Mirror.get_filename(self, link, response)
 
 
 

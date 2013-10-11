@@ -1,11 +1,11 @@
 from track.cli import TestImpl, OperatorImpl
-from track.spider import URL
+from track.spider import Link
 
 
 class TestRules(object):
 
     def test_path_level(self):
-        test = lambda a: TestImpl.path_level(URL(a))
+        test = lambda a: TestImpl.path_level(Link(a))
 
         assert test('http://example.org/') == 0
         assert test('http://example.org/foo') == 0
@@ -13,7 +13,7 @@ class TestRules(object):
 
     def test_path_distance(self):
         test = lambda a,b: TestImpl.path_distance(
-            URL('http://example.org%s' % a, URL('http://example.org%s' % b)))
+            Link('http://example.org%s' % a, Link('http://example.org%s' % b)))
 
         assert test('/foo', '') == False
         assert test('/foo', '/bar') == False
@@ -25,39 +25,39 @@ class TestRules(object):
         assert test('/foo/bar', '/foo/') == 0
 
     def test_protocol(self):
-        test = lambda a: TestImpl.protocol(URL(a))
+        test = lambda a: TestImpl.protocol(Link(a))
 
         assert test('http://www.example.org/') == 'http'
 
     def test_port(self):
-        test = lambda a: TestImpl.port(URL(a))
+        test = lambda a: TestImpl.port(Link(a))
 
         assert test('http://www.example.org/') == 80
         assert test('http://www.example.org:8080') == 8080
 
     def test_path(self):
-        test = lambda a: TestImpl.path(URL(a))
+        test = lambda a: TestImpl.path(Link(a))
 
         assert test('http://www.example.org/path/') == '/path/'
         assert test('http://www.example.org/') == '/'
         assert test('http://www.example.org') == '/'
 
     def test_filename(self):
-        test = lambda a: TestImpl.filename(URL(a))
+        test = lambda a: TestImpl.filename(Link(a))
 
         assert test('http://www.example.org/path/') == ''
         assert test('http://www.example.org/path') == 'path'
         assert test('http://www.example.org/path/index.html') == 'index.html'
 
     def test_extension(self):
-        test = lambda a: TestImpl.extension(URL(a))
+        test = lambda a: TestImpl.extension(Link(a))
 
         assert test('http://www.example.org/path/') == ''
         assert test('http://www.example.org/path') == ''
         assert test('http://www.example.org/index.html') == 'html'
 
     def test_querystring(self):
-        test = lambda a: TestImpl.querystring(URL(a))
+        test = lambda a: TestImpl.querystring(Link(a))
 
         assert test('http://www.example.org/path/?a=1&b=2') == 'a=1&b=2'
         assert test('http://www.example.org/path/') == ''

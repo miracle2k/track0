@@ -9,29 +9,30 @@ from track.parser import get_parser_for_mimetype, HeaderLinkParser
 
 class Logger(object):
 
-    def url(self, url):
+
+    def link(self, link):
         """Note a url being processed.
         """
-        print('{0}{1}'.format(' '*url.depth, url.url))
+        print('{0}{1}'.format(' '*link.depth, link.url))
 
 
 class Rules(object):
-    """Defines the logic of the spider: when to follow a URL,
+    """Defines the logic of the spider: when to follow a link,
     when to save a file locally etc.
     """
 
-    def follow(self, url):
-        """Return ``True`` if the spider should follow this URL.
+    def follow(self, link):
+        """Return ``True`` if the spider should follow this link.
         """
         raise NotImplementedError()
 
-    def save(self, url):
-        """Return ``True`` if the url should be saved locally.
+    def save(self, link):
+        """Return ``True`` if the link should be saved locally.
         """
         raise NotImplementedError()
 
     def stop(self, page):
-        """Return ``False`` if the urls of a page should not be followed.
+        """Return ``False`` if the links of a page should not be followed.
 
         The difference to :meth:`follow` is that this runs after
         :meth:`save`.
@@ -41,15 +42,28 @@ class Rules(object):
         """Allows configuring the general environment.
         """
 
-    def configure_request(self, request, url):
-        """Allows configuring the request for each url.
+    def configure_request(self, request, link):
+        """Allows configuring the request for each link.
         """
 
 
-class URL(object):
-    """A URL to be processed.
+class Link(object):
+    """A url we encountered in the wild, to be processed.
 
-    Knows various metadata like depth, source etc.
+    This class is called a "link", to emphasise the distinction we care
+    about: The link is what we find out there, written by a user,
+    not normalized, with case issues, containing a fragment etc. The
+    link knows about where it was found (and at what spidering depth etc.)
+
+    When we normalize the hell out of the link and disassociate it from
+    the spidering process, we get a url.
+
+    Documents A and B both have *links* to C; it is important for us to
+    view those distinctly. But document C itself is represented by a
+    unique url, even if both links look differently.
+
+    Throughout the code base we try to enforce this distinction in
+    variable and parameter names.
     """
 
     def __init__(self, url, previous=None, **info):
@@ -68,7 +82,7 @@ class URL(object):
         return self.info.get('source')
 
     def set_previous(self, previous):
-        """Set the url that is the source for this one.
+        """Set the link that is the source for this one.
             """
         self.previous = previous
         if previous:
@@ -118,7 +132,7 @@ class URL(object):
         assert type in ('head', 'full')
         if not hasattr(self, 'session'):
             raise TypeError(
-                'This URL instance has no session, cannot resolve().')
+                'This Link instance has no session, cannot resolve().')
 
         # TODO: Consider just raising the error all the way through
         # the rule handling.
@@ -187,7 +201,7 @@ class URL(object):
         return self
 
     def __repr__(self):
-        return '<URL {0}>'.format(self.url)
+        return '<Link {0}>'.format(self.url)
 
 
 def get_content_type(response):
@@ -204,14 +218,14 @@ class Spider(object):
     session_class = requests.Session
 
     def __init__(self, rules, mirror=None):
-        self._url_queue = deque()
+        self._link_queue = deque()
         self._known_urls = []
         self.rules = rules
         self.mirror = mirror
         self.logger = Logger()
 
     def __len__(self):
-        return len(self._url_queue)
+        return len(self._link_queue)
 
     @property
     def session(self):
@@ -222,49 +236,49 @@ class Spider(object):
         return self._session
 
     def add(self, url, **kwargs):
-        """Add a new URL to be processed.
+        """Add a new Link to be processed.
         """
         opts = dict(previous=None, source='user')
         opts.update(kwargs)
-        url_obj = URL(url, **opts)
-        self._url_queue.appendleft(url_obj)
+        link = Link(url, **opts)
+        self._link_queue.appendleft(link)
 
     def loop(self):
-        while len(self._url_queue):
+        while len(self._link_queue):
             self.process_one()
         if self.mirror:
             self.mirror.finish()
 
     def process_one(self):
-        url = self._url_queue.pop()
+        link = self._link_queue.pop()
 
         # Do not bother to process the same url twice
-        if url.url in self._known_urls:
+        if link.url in self._known_urls:
             return
 
         # Attach a session to the url so it can resolve itself
-        url.session = self.session
+        link.session = self.session
 
         # Test whether this is a link that we should even follow
-        if url.source != 'user' and not self.rules.follow(url):
+        if link.source != 'user' and not self.rules.follow(link):
             return
 
         # Before we download that document, check if it is already in
         # the local mirror; if so, send along an etag or timestamp
         # that we might have.
         etag = modified = None
-        if url.url in self.mirror.url_info:
-            etag = self.mirror.url_info[url.url].get('etag') or False
-            modified = self.mirror.url_info[url.url].get('last-modified') or False
+        if link.url in self.mirror.url_info:
+            etag = self.mirror.url_info[link.url].get('etag') or False
+            modified = self.mirror.url_info[link.url].get('last-modified') or False
 
         # Go ahead with the request
-        self.logger.url(url)
-        response = url.resolve('full', etag=etag, last_modified=modified)
+        self.logger.link(link)
+        response = link.resolve('full', etag=etag, last_modified=modified)
         if response is False:
             # This request failed at the connection stage
-            if url.retries <= self.max_retries:
-                url = url.retry()
-                self._url_queue.appendleft(url)
+            if link.retries <= self.max_retries:
+                link = link.retry()
+                self._link_queue.appendleft(link)
             return
 
         # If we have received a 304 not modified response, we are happy
@@ -275,16 +289,16 @@ class Spider(object):
         # If we have been redirected to a different url, add that
         # url to the queue again.
         if response.redirects:
-            redir_url = URL(
-                response.redirects[-1].url, previous=url.previous, **url.info)
-            self._url_queue.append(redir_url)
+            redir_link = Link(
+                response.redirects[-1].url, previous=link.previous, **link.info)
+            self._link_queue.append(redir_link)
             response.close()
 
             # The mirror needs to know about the redirect. The status
             # code if the first redirect in a chain determines the type
             # (i.e. permanent, temporary etc)
             self.mirror.add_redirect(
-                url, redir_url, response.status_code)
+                link, redir_link, response.status_code)
             return
 
         # Do not follow errors
@@ -304,19 +318,19 @@ class Spider(object):
         # Save the file locally?
         if self.mirror:
             if not response_was_304:
-                if self.rules.save(url):
-                    self.mirror.add(url, response)
+                if self.rules.save(link):
+                    self.mirror.add(link, response)
             else:
                 # Mirror still needs to know we found this url so
                 # it won't be deleted during cleanup.
-                self.mirror.encounter_url(url)
+                self.mirror.encounter_url(link)
 
         # No need to process this url again
-        self._known_urls.append(url.url)
+        self._known_urls.append(link.url)
 
         # Run a hook that makes it possible to stop now and ignore
         # all the urls contained in this page.
-        if self.rules.stop(url):
+        if self.rules.stop(link):
             return
 
         # Process follow up links.
@@ -324,22 +338,22 @@ class Spider(object):
         # If we have a "304 not modified response", then the mirror
         # can tell us the urls that this page is pointing to.
         if response_was_304:
-            for link_url, info in self.mirror.url_info[url.url]['links']:
-                link = URL(link_url, previous=url, **info)
-                self._url_queue.appendleft(link)
+            for link_url, info in self.mirror.url_info[link.url]['links']:
+                link = Link(link_url, previous=link, **info)
+                self._link_queue.appendleft(link)
 
         else:
             # Add links from the parsed content + the http headers
-            for link, opts in chain(
+            for url, opts in chain(
                     response.links_parsed,
                     response.parsed or ()):
                 # Put together a url object with all the info that
                 # we have ad that tests can use.
                 try:
-                    link = URL(link, **opts)
+                    link = Link(url, **opts)
                 except urlnorm.InvalidUrl:
                     continue
-                link.set_previous(url)
-                self._url_queue.appendleft(link)
+                link.set_previous(link)
+                self._link_queue.appendleft(link)
 
 

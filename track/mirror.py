@@ -123,7 +123,7 @@ import shelve
 from urllib.parse import urlparse
 import itertools
 from track.parser import get_parser_for_mimetype
-from track.spider import get_content_type, URL
+from track.spider import get_content_type, Link
 
 
 def safe_filename(filename):
@@ -175,16 +175,16 @@ class Mirror(object):
         for url, data in self.url_info.items():
             self._insert_into_url_usage(url, data['links'])
 
-    def get_filename(self, url, response):
+    def get_filename(self, link, response):
         """Determine the filename under which to store a URL.
 
         This is designed for subclasses to be able to provide a custom
         implementation. They do not need to care about making the
         filename safe for the filesystem.
         """
-        url = response.url
+        link = response.url
 
-        parsed = urlparse(url)
+        parsed = urlparse(link)
 
         # Prefix the domain to the filename
         filename = path.join(parsed.netloc, parsed.path[1:])
@@ -231,11 +231,11 @@ class Mirror(object):
 
         return shelve.open(path.join(track_dir, filename))
 
-    def add(self, url, response):
+    def add(self, link, response):
         """Store the given page.
         """
         # Figure out the filename first
-        rel_filename = self.get_filename(url, response)
+        rel_filename = self.get_filename(link, response)
         # TODO: Make sure the filename is not outside the cache directory,
         # avoid issues with servers injecting special path instructions.
         rel_filename = safe_filename(rel_filename)
@@ -261,17 +261,17 @@ class Mirror(object):
             'last-modified': response.headers.get('last-modified'),
             'links': []
         }
-        for link, info in itertools.chain(
+        for url, info in itertools.chain(
                 response.links_parsed,
                 response.parsed or ()):
-            url_info['links'].append((link, info))
+            url_info['links'].append((url, info))
         self.url_info[response.url] = url_info
         # The url itself
         self.encountered_urls[response.url] = rel_filename
         self.stored_urls.setdefault(response.url, set())
         self.stored_urls[response.url] |= {rel_filename}
         # Be sure to to update the reverse cache
-        self._insert_into_url_usage(url.url, url_info['links'])
+        self._insert_into_url_usage(link.url, url_info['links'])
         # Make sure database is saved
         self.flush()
 
@@ -281,14 +281,14 @@ class Mirror(object):
             self._convert_links(response.url)
             self._create_index()
 
-    def encounter_url(self, url_obj):
+    def encounter_url(self, link):
         """Add a url to the list of encountered urls.
 
         This is like add(), except it doesn't actually save anything. It
         will protect this url from being deleted by
         :meth:`delete_unencountered`.
         """
-        url = url_obj.url
+        url = link.url
         assert url in self.stored_urls
         # When storing the same url using a different mirror layout without
         # using delete_unregistred() to get rid of the old one, it is
@@ -303,13 +303,13 @@ class Mirror(object):
         # the 304 status response may suffice.
         self.encountered_urls[url] = list(self.stored_urls[url])[0]
 
-    def add_redirect(self, url, target_url, code):
+    def add_redirect(self, link, target_link, code):
         """Register a redirect.
 
         Will make sure that any links pointing to ``url`` can be rewritten
         to the file behind ``target_url``.
         """
-        self.redirects[url.url] = (code, target_url.url)
+        self.redirects[link.url] = (code, target_link.url)
         self.flush()
 
     def finish(self):
@@ -397,7 +397,7 @@ class Mirror(object):
 
             def replace_link(url):
                 # Abuse the URL class to normalize the url for matching
-                url = URL(url).url
+                url = Link(url).url
 
                 # See what we know about this link. Is the target url
                 # saved locally? Is it a known redirect?

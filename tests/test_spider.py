@@ -19,13 +19,13 @@ def spiderfactory():
 def test_normalize_url(spider):
     # Trailing slash
     spider.add('http://elsdoerfer.name')
-    url = spider._url_queue.pop()
+    url = spider._link_queue.pop()
     assert url.url == 'http://elsdoerfer.name/'
     assert url.parsed.path == '/'
 
     # Case-sensitive hostname, default port
     spider.add('HTTP://elsdoerFER.NaME:80')
-    url = spider._url_queue.pop()
+    url = spider._link_queue.pop()
     assert url.url == 'http://elsdoerfer.name/'
 
 
@@ -60,16 +60,16 @@ def test_http_header_links(spiderfactory):
         spider.add(uris[0])   # bar
         spider.process_one()
         assert len(spider) == 1
-        assert spider._url_queue[-1].url.endswith('/meta.rdf')
-        assert spider._url_queue[-1].source == 'http-header'
+        assert spider._link_queue[-1].url.endswith('/meta.rdf')
+        assert spider._link_queue[-1].source == 'http-header'
 
         # The first url is a "requisite" link
         spider = spiderfactory()
         spider.add(uris[1])   # foo
         spider.process_one()
         assert len(spider) == 1
-        assert spider._url_queue[-1].url.endswith('/style.css')
-        assert spider._url_queue[-1].info['inline'] == True
+        assert spider._link_queue[-1].url.endswith('/style.css')
+        assert spider._link_queue[-1].info['inline'] == True
 
 
 class TestRedirects:
@@ -133,7 +133,7 @@ class TestRedirects:
         }):
             # Setup save rule such that the redirect target, bar,
             # is not followed and thus not added to the mirror.
-            spider.rules._follow = lambda url: not 'bar' in url.url
+            spider.rules._follow = lambda link: not 'bar' in link.url
 
             spider.add('http://example.org/foo', source=None)
             spider.add('http://example.org/qux')
