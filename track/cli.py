@@ -656,7 +656,7 @@ class CLIMirror(Mirror):
             self,
             output_path,
             write_at_once=not namespace.no_live_update,
-            convert_links=namespace.no_link_conversion)
+            convert_links=not namespace.no_link_conversion)
 
         self.layout = namespace.layout
         self._url_formatter = URLFormatter()
