@@ -30,20 +30,6 @@ class TestImpl(object):
         """Passes if the url is necessary to display a page that has
         been saved. This includes images, stylesheets script files, but
         also things that are more rare, like iframes or embeds.
-
-        Note that this in effect functions recursively. If a HTML page
-        links to a stylesheet, and the stylesheet defines a background
-        image, then the image will pass as well.
-
-        This is further special in that it is the one filter that is
-        enabled by default. That is, the internal default ``@follow``
-        rule is::
-
-            - +requisite
-
-        You can disable this easily:
-
-            track URL @follow -requisite
         """
         return url.info.get('inline', False)
 
