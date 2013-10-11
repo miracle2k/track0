@@ -37,7 +37,7 @@ def test_error_code(spider):
         spider.process_one()
 
         # Nothing was saved
-        assert len(spider.mirror.urls) == 0
+        assert len(spider.mirror.encountered_urls) == 0
         # No further links were added to the queue
         assert len(spider) == 0
 
@@ -69,7 +69,7 @@ def test_http_header_links(spiderfactory):
         spider.process_one()
         assert len(spider) == 1
         assert spider._url_queue[-1].url.endswith('/style.css')
-        assert spider._url_queue[-1].requisite == True
+        assert spider._url_queue[-1].info['inline'] == True
 
 
 class TestRedirects:
@@ -170,7 +170,7 @@ class TestRedirects:
 
             # The redirect was followed despite the redirecting url not
             # matching the size filter
-            assert len(spider.mirror.urls) == 1
+            assert len(spider.mirror.encountered_urls) == 1
 
 
 

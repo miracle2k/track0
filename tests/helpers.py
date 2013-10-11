@@ -74,10 +74,16 @@ class MemoryMirror(BaseMirror):
             return buffer
         return TextIOWrapper(buffer)
 
+    def open_shelve(self, filename):
+        return {}
+
+    def flush(self):
+        pass
+
     def get_file(self, url):
         """Return the virtual file for this url.
         """
-        filename = self.urls[url]
+        filename = self.encountered_urls[url]
         return self.virtual_files[filename]
 
 

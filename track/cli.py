@@ -1,9 +1,11 @@
+from contextlib import closing
 import hashlib
 import numbers
+import shelve
 import string
 import sys
 import fnmatch
-from os.path import commonprefix, normpath, abspath, basename, splitext
+from os.path import commonprefix, normpath, abspath, basename, splitext, join
 import argparse
 from track.mirror import Mirror
 from track.spider import Spider, Rules, get_content_type
@@ -43,7 +45,7 @@ class TestImpl(object):
 
             track URL @follow -requisite
         """
-        return url.requisite
+        return url.info.get('inline', False)
 
     @staticmethod
     def depth(url):
@@ -639,8 +641,17 @@ class CLIMirror(Mirror):
     """Customized mirror that follows the user's options.
     """
 
+    @classmethod
+    def read_info(cls, mirror_directory):
+        """Load mirror info file w/o creating the mirror. This should
+        not be necessary, and points to API design flaw in CLIMirror.
+        """
+        with closing(shelve.open(join(mirror_directory, '.track', 'info'))) as f:
+            return dict(f)
+
     def __init__(self, namespace):
         output_path = normpath(abspath(namespace.path or 'tracked'))
+
         Mirror.__init__(
             self,
             output_path,
@@ -708,14 +719,28 @@ class Script:
     @classmethod
     def build_argument_parser(cls, prog=None):
         parser = MyArgumentParser(prog, prefix_chars='-@')
+        # 1. We are only providing short-hand arguments for the most
+        #    important arguments. For others, the readability of a long
+        #    option is preferred.
+        # 2. short options use uppercase if they are significant
+        #    environment-setup type options (like output path) as opposed
+        #    to behaviour details (like the user agent).
+        #
         # Affecting the local mirror
         parser.add_argument(
             '-O', '--path',
             help='output directory for the mirror')
         parser.add_argument(
+            '-U', '--update', action='store_true',
+            help="use the command line options previously used when an"
+                 "existing mirror was created")
+        parser.add_argument(
             '--layout',
             help='a custom layout for organizing the files in the target '
                  'directory; use tests as variables, e.g. {domain}')
+        parser.add_argument(
+            '--enable-delete', action='store_true',
+            help='delete existing local files no encountered by the spider')
         parser.add_argument(
             '--no-link-conversion', action='store_true',
             help='do not modify urls in the local copy in any way')
@@ -785,8 +810,38 @@ class Script:
         parser = self.build_argument_parser(argv[0])
         namespace = parser.parse_args(argv[1:])
 
+        # Setup the mirror
+        if namespace.update:
+            if not CLIMirror.is_valid_mirror(namespace.path):
+                print(('error: --update requested, but {} is not an '
+                       'existing mirror').format(namespace.path))
+                return
+
+            info = CLIMirror.read_info(namespace.path)
+            last_ns, cmdline = info['cli-ns'], ' '.join(info['cli-argv'])
+
+            # Copy most attributes from the old namespace to ours
+            # TODO: We should raise an error if there are any other
+            # arguments besides --update and --path which affect the
+            # the mirror output (i.e. number of threads would be ok).
+            for attr in dir(last_ns):
+                if attr.startswith('_'):
+                    continue
+                if attr in ['path']:
+                    continue
+                setattr(namespace, attr, getattr(last_ns, attr))
+
+            # TODO: Currently includes options like -O which are are NOT
+            # using from the stored copy. Will confuse the user.
+            print('Using previous configuration: {}'.format(cmdline))
+            print()
+
+
+        # Open the local mirror
+        mirror = CLIMirror(namespace)
+
+        # Setup the spider
         try:
-            mirror = CLIMirror(namespace)
             spider = Spider(CLIRules(namespace), mirror=mirror)
         except RuleError as e:
             print('error: {1}: {0}'.format(*e.args))
@@ -806,7 +861,22 @@ class Script:
             parser.print_usage()
             print('error: I need at least one url to start with')
             return
+
+        # Before we start, store the cli arguments in the mirror so
+        # it can be updated without specifying them again.
+        # TODO: Absolutize filenames before storing them.
+        if not namespace.update:
+            mirror.info['cli-ns'] = namespace
+            mirror.info['cli-argv'] = argv[1:]
+
+        # Go
         spider.loop()
+
+        # If so desired, we can delete files from the mirror that no
+        # longer exist online.
+        # TODO: This needs to happen before Mirror.finish()
+        if namespace.enable_delete:
+            mirror.delete_unencountered()
 
 
 def main(argv):

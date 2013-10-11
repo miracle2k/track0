@@ -114,11 +114,12 @@ such a link.
 TODO: Finally, during purging, we might have to do the reverse and
 replace local urls with remote ones.
 """
-import hashlib
 
 import mimetypes
 import os
 from os import path
+import hashlib
+import shelve
 from urllib.parse import urlparse
 import itertools
 from track.parser import get_parser_for_mimetype
@@ -135,19 +136,44 @@ class Mirror(object):
     """Have local copy of one or multiple urls.
     """
 
+    @classmethod
+    def is_valid_mirror(cls, directory):
+        """Check if the directory contains a track mirror."""
+        if not path.exists(directory):
+            return False
+        if not path.exists(path.join(directory, '.track')):
+            return False
+        return True
+
     def __init__(self, directory, write_at_once=True, convert_links=True):
         self.directory = directory
         self.write_at_once = write_at_once
         self.convert_links = convert_links
 
-        # maps urls in the mirror to the local filenames
-        self.urls = {}
+        # All urls stored in the mirror.
+        # .. is persisted so we know what is in the currently stored in
+        #    the mirror (vs. what the spider has found this time around).
+        # .. we could look at the filesystem itself for this, but would
+        #    run the risk of deleting files that do not belong to us.
+        self.stored_urls = self.open_shelve('urls')
+        # stores extra data like etags and mimetypes
+        self.url_info = self.open_shelve('url_info')
+        # used to store arbitrary extra data
+        self.info = self.open_shelve('info')
+
+        # a separate map that essentially marks urls as "encountered",
+        # for use with the :meth:`delete_unencountered` method.
+        self.encountered_urls = {}
         # the redirects that we know about
+        # TODO: Think about whether we need to separate redirects into
+        # encountered and stored in the same way we handle uls.
         self.redirects = {}
-        # stores extra data like etags and mimetypes.
-        self.url_info = {}
-        # maps which urls are referenced by which other urls.
+
+        # Generate a maps which provide for each url a list of pages
+        # that point to said url.
         self.url_usage = {}
+        for url, data in self.url_info.items():
+            self._insert_into_url_usage(url, data['links'])
 
     def get_filename(self, url, response):
         """Determine the filename under which to store a URL.
@@ -196,6 +222,15 @@ class Mirror(object):
             os.makedirs(path.dirname(full_filename))
         return open(full_filename, mode)
 
+    def open_shelve(self, filename):
+        """Open a persistent dictionary.
+        """
+        track_dir = path.join(self.directory, '.track')
+        if not path.exists(track_dir):
+            os.makedirs(track_dir)
+
+        return shelve.open(path.join(track_dir, filename))
+
     def add(self, url, response):
         """Store the given page.
         """
@@ -204,6 +239,9 @@ class Mirror(object):
         # TODO: Make sure the filename is not outside the cache directory,
         # avoid issues with servers injecting special path instructions.
         rel_filename = safe_filename(rel_filename)
+        # Do not allow writing inside the data directory, this would
+        # possibly allow code injection
+        assert not rel_filename.startswith('.track/')
 
         # Store the file
         with self.open(rel_filename, 'wb') as f:
@@ -216,18 +254,54 @@ class Mirror(object):
             with self.open(path.join('.originals', rel_filename), 'wb') as f:
                 f.write(response.content)
 
-        # Add to database
-        self.urls[response.url] = rel_filename
-        self.url_info[response.url] = {'mimetype': get_content_type(response)}
-        for url, _ in response.parsed or ():
-            self.url_usage.setdefault(url, [])
-            self.url_usage[url].append(response.url)
+        # Add to database: data about the url
+        url_info = {
+            'mimetype': get_content_type(response),
+            'etag': response.headers.get('etag'),
+            'last-modified': response.headers.get('last-modified'),
+            'links': []
+        }
+        for link, info in itertools.chain(
+                response.links_parsed,
+                response.parsed or ()):
+            url_info['links'].append((link, info))
+        self.url_info[response.url] = url_info
+        # The url itself
+        self.encountered_urls[response.url] = rel_filename
+        self.stored_urls.setdefault(response.url, set())
+        self.stored_urls[response.url] |= {rel_filename}
+        # Be sure to to update the reverse cache
+        self._insert_into_url_usage(url.url, url_info['links'])
+        # Make sure database is saved
+        self.flush()
 
         # See if we should apply modifications now (as opposed to waiting
         # until the last response has been added).
         if self.write_at_once:
             self._convert_links(response.url)
             self._create_index()
+
+    def encounter_url(self, url_obj):
+        """Add a url to the list of encountered urls.
+
+        This is like add(), except it doesn't actually save anything. It
+        will protect this url from being deleted by
+        :meth:`delete_unencountered`.
+        """
+        url = url_obj.url
+        assert url in self.stored_urls
+        # When storing the same url using a different mirror layout without
+        # using delete_unregistred() to get rid of the old one, it is
+        # possible to end up with a single url being stored multiple times.
+        # In such a case, we just one at random to keep. This may are may
+        # not be the one that matches the current layout the user wants.
+        # TODO: This points to a related and deeper problem: the users
+        # desired filename may not be among the stored list, if due to
+        # a 304 response the file does not get written again using a new
+        # mirror filename layout. Part of the problem is that in order
+        # to generate the correct filename, we need a response object here;
+        # the 304 status response may suffice.
+        self.encountered_urls[url] = list(self.stored_urls[url])[0]
 
     def add_redirect(self, url, target_url, code):
         """Register a redirect.
@@ -236,17 +310,31 @@ class Mirror(object):
         to the file behind ``target_url``.
         """
         self.redirects[url.url] = (code, target_url.url)
+        self.flush()
 
     def finish(self):
         self._convert_links()
         self._create_index()
+        self.flush()
+
+    def flush(self):
+        """Write the internal mirror data structures to disk.
+        """
+        self.stored_urls.sync()
+        self.url_info.sync()
+        self.info.sync()
+
+    def _insert_into_url_usage(self, url, links):
+        for link, info in links:
+            self.url_usage.setdefault(link, set())
+            self.url_usage[link] |= {url}
 
     def _create_index(self):
         """Create an index file of all pages in the mirror.
         """
         result = ''
-        for url, filename in self.urls.items():
-            result += '<a href="{0}">{0}</a><br>'.format(filename)
+        for url, filenames in self.stored_urls.items():
+            result += '<a href="{0}">{0}</a><br>'.format(list(filenames)[0])
         with self.open('index.html', 'w') as f:
             f.write(result)
 
@@ -257,20 +345,46 @@ class Mirror(object):
         if not self.convert_links:
             return
 
-        if not for_url:
-            files_to_process = self.urls.items()
-        else:
+        # We only handle links between urls encountered in this run, not
+        # all urls in the mirror. I.e. using the same mirror for multiple
+        # runs with different urls will not link between them.
+        # The reason is that we cannot combine write_at_once mode with
+        # :meth:`delete_unrefreshed`. We'd first be rewriting a link to
+        # an existing file, then that file gets deleted afterwards.
+        #
+        # Possible solutions:
+        #
+        #   - Only link between all urls if deletion is not used.
+        #     Problem: API design issues (--enable-delete is a CLI option),
+        #        inconsistent behaviour hard to explain.
+        #
+        #   - Find a way to write these replaced links back to the original
+        #     once a file gets deleted. If link replacing worked with indices
+        #     rather than a fresh parsing that would be simple.
+        #
+        # XXX: Actually, the problem affects us even without write_at_once;
+        # it's a general issue with the deletion: It's possible that a file
+        # gets deleted during a mirror-update, but a different file that
+        # was linking to it was not re-downloaded due to 304, therefore
+        # retaining the local link. What we really need is a way to write
+        # local links back to their original ones, and this should not be
+        # so hard given that we have a database of urls->filenames.
+        url_database = self.encountered_urls
 
+        if not for_url:
+            files_to_process = url_database.items()
+        else:
             files_to_process = itertools.chain(
                 # The url itself
-                ((for_url, self.urls[for_url]),),
+                ((for_url, url_database[for_url]),),
                 # All files pointing to the url
-                map(lambda u: (u, self.urls[u]),
-                    self.url_usage.get(for_url, [])))
+                [(u, url_database[u])
+                 for u in self.url_usage.get(for_url, [])
+                 if u in url_database])
         for url, filename in files_to_process:
-            self._convert_links_in_file(filename, url)
+            self._convert_links_in_file(filename, url, url_database)
 
-    def _convert_links_in_file(self, file, url):
+    def _convert_links_in_file(self, file, url, url_database):
         mimetype = self.url_info[url]['mimetype']
         parser_class = get_parser_for_mimetype(mimetype)
         if not parser_class:
@@ -285,13 +399,13 @@ class Mirror(object):
                 # See what we know about this link. Is the target url
                 # saved locally? Is it a known redirect?
                 local_filename = redir_url = redir_code = None
-                if url in self.urls:
-                    local_filename = self.urls[url]
+                if url in url_database:
+                    local_filename = url_database[url]
                 else:
                     if url in self.redirects:
                         redir_code, redir_url = self.redirects[url]
-                        if redir_url in self.urls:
-                            local_filename = self.urls[redir_url]
+                        if redir_url in url_database:
+                            local_filename = url_database[redir_url]
 
                 # We have the document behind this link available locally
                 if local_filename:
@@ -322,4 +436,50 @@ class Mirror(object):
             f.seek(0)
             f.write(new_content)
             f.truncate()
+
+    def delete_unencountered(self):
+        """This will delete all files in the mirror that have not
+        been explicitly registered with this instance.
+
+        In other words, if an existing mirror on the filesystem is
+        opened that already has urls in it, they will all be deleted
+        unless :meth:`add` has been called for them.
+        """
+        for url in self.stored_urls:
+            files_to_delete = []
+
+            if not url in self.encountered_urls:
+                # Remove the url entirely
+                files_to_delete = self.stored_urls[url]
+                del self.stored_urls[url]
+                del self.url_info[url]
+
+            elif self.stored_urls[url] != self.encountered_urls.get(url):
+                # The local save path of the url has changed. Remove all
+                # previous local files that used to belong to the url.
+                files_to_delete = self.stored_urls[url] - {self.encountered_urls[url]}
+                # Update the stored
+                self.stored_urls[url] = {self.encountered_urls[url]}
+
+            for name in files_to_delete:
+                print('deleting', name)
+                filename = path.join(self.directory, name)
+                os.unlink(filename)
+                clear_directory_structure(filename)
+
+        # Regenerate url link cache
+        self.url_usage = {}
+        for url, data in self.url_info.items():
+            self._insert_into_url_usage(url, data['links'])
+
+
+def clear_directory_structure(filename):
+    """Delete an empty directory structure from where the place
+    where ``filename`` used to be located.
+    """
+    directory = path.dirname(filename)
+    while os.listdir(directory) == []:
+        os.rmdir(directory)
+        directory = path.dirname(directory)
+
 

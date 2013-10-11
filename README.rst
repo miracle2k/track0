@@ -181,6 +181,53 @@ It is possible to turn this behaviour off using the
 ``-no-link-conversion`` switch.
 
 
+Update an existing mirror
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Inside the mirror will be a hidden folder containing the data that track
+needs to update a mirror, including things like etags and last-modified
+dates which are used to avoid re-downloading content where possible.
+
+To update a mirror, simple call track while with the correct directory::
+
+    $ track -O ./local-mirror
+
+The mirror knows what arguments where used the last time, and will use them
+again for the update.
+
+You can happily use the same directory for multiple different sites::
+
+    $ track -O ./local-mirror http://requests.readthedocs.org/
+    $ track -O ./local-mirror http://lwn.net/
+
+Note however that only the arguments of the last call are remembered. So
+in the above case, if you update the mirror with a simple
+``track -O ./local-mirror``, only ``http://lwn.net`` is repeated.
+
+By default, track only ever adds or changes files in the local mirror; it
+never deletes any existing pages. You can change this behaviour::
+
+    $ track -O ./local-mirror --enable-delete
+
+Using this flag, all existing files that where not encountered and saved
+during this run will be deleted afterwards. This doesn't work well with
+dumping multiple sites into the same directory though, as described above.
+
+    .. note::
+        The delete mode does not mean "delete pages that no longer exist
+        online"; it means: "delete pages not encountered by the spider
+        tis time". For example, imagine you have mirrored a site like this::
+
+             $ track http://example.org @follow "+depth<=3"
+
+        Then, you update it with a modified follow rule::
+
+             $ track --enable-delete http://example.org @follow "+depth<=2"
+
+        This means that all pages on depth level 3 will be removed.
+
+
+
 Breaking tests
 ~~~~~~~~~~~~~~
 

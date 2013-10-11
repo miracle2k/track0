@@ -52,19 +52,20 @@ class URL(object):
     Knows various metadata like depth, source etc.
     """
 
-    def __init__(self, url, previous=None, source=None, requisite=False,
-                 **extra):
+    def __init__(self, url, previous=None, **info):
         self.url = urlnorm.norm(url)
-        self.source = source
-        self.requisite = requisite
         self.set_previous(previous)
-        self.extra = extra
+        self.info = info
 
         # Runtime data
         self.session = None
         self.response = None
         self.exception = None
         self.retries = 0
+
+    @property
+    def source(self):
+        return self.info.get('source')
 
     def set_previous(self, previous):
         """Set the url that is the source for this one.
@@ -76,8 +77,6 @@ class URL(object):
             self.domain_depth = 0 \
                 if self.parsed.netloc != previous.parsed.netloc \
                 else previous.domain_depth + 1
-            if previous.requisite:
-                self.requisite = True
         else:
             self.root = self
             self.depth = 0
@@ -100,7 +99,7 @@ class URL(object):
             self._parsed = urlparse(self.url)
         return self._parsed
 
-    def resolve(self, type):
+    def resolve(self, type, etag=None, last_modified=None):
         """This actually executes a request for this URL.
 
         A ``session`` attribute with a ``requests`` session needs to
@@ -138,9 +137,14 @@ class URL(object):
 
         try:
             method = 'GET' if type == 'full' else 'HEAD'
-            request = requests.Request(method, self.url).prepare()
+            request = requests.Request(method, self.url)
+            if etag:
+                request.headers['if-none-match'] = etag
+            if last_modified:
+                request.headers['if-modified-since'] = last_modified
             self.session.configure_request(request, self)
 
+            request = request.prepare()
             response = self.session.send(
                 request,
                 # If the url is not saved and not a document, we don't
@@ -245,9 +249,17 @@ class Spider(object):
         if url.source != 'user' and not self.rules.follow(url):
             return
 
-        # Download the URL
+        # Before we download that document, check if it is already in
+        # the local mirror; if so, send along an etag or timestamp
+        # that we might have.
+        etag = modified = None
+        if url.url in self.mirror.url_info:
+            etag = self.mirror.url_info[url.url].get('etag') or False
+            modified = self.mirror.url_info[url.url].get('last-modified') or False
+
+        # Go ahead with the request
         self.logger.url(url)
-        response = url.resolve('full')
+        response = url.resolve('full', etag=etag, last_modified=modified)
         if response is False:
             # This request failed at the connection stage
             if url.retries <= self.max_retries:
@@ -255,12 +267,16 @@ class Spider(object):
                 self._url_queue.appendleft(url)
             return
 
+        # If we have received a 304 not modified response, we are happy
+        response_was_304 = response.status_code == 304
+        if response.status_code == 304:
+            print("304")
+
         # If we have been redirected to a different url, add that
         # url to the queue again.
         if response.redirects:
             redir_url = URL(
-                response.redirects[-1].url, previous=url.previous,
-                source=url.source, requisite=url.requisite, **url.extra)
+                response.redirects[-1].url, previous=url.previous, **url.info)
             self._url_queue.append(redir_url)
             response.close()
 
@@ -283,10 +299,17 @@ class Spider(object):
             response.parsed = parser_class(response.text, response.url)
         else:
             response.parsed = None
+        response.links_parsed = HeaderLinkParser(response)
 
         # Save the file locally?
-        if self.mirror and self.rules.save(url):
-            self.mirror.add(url, response)
+        if self.mirror:
+            if not response_was_304:
+                if self.rules.save(url):
+                    self.mirror.add(url, response)
+            else:
+                # Mirror still needs to know we found this url so
+                # it won't be deleted during cleanup.
+                self.mirror.encounter_url(url)
 
         # No need to process this url again
         self._known_urls.append(url.url)
@@ -296,19 +319,27 @@ class Spider(object):
         if self.rules.stop(url):
             return
 
-        # Add links from the parsed content + the http headers
-        for link, opts in chain(
-                HeaderLinkParser(response),
-                response.parsed or ()):
-            # Put together a url object with all the info that
-            # we have ad that tests can use.
-            requisite = opts.pop('inline', False)
-            source = opts.pop('source', None)
-            try:
-                link = URL(link, requisite=requisite, source=source, **opts)
-            except urlnorm.InvalidUrl:
-                continue
-            link.set_previous(url)
-            self._url_queue.appendleft(link)
+        # Process follow up links.
+        #
+        # If we have a "304 not modified response", then the mirror
+        # can tell us the urls that this page is pointing to.
+        if response_was_304:
+            for link_url, info in self.mirror.url_info[url.url]['links']:
+                link = URL(link_url, previous=url, **info)
+                self._url_queue.appendleft(link)
+
+        else:
+            # Add links from the parsed content + the http headers
+            for link, opts in chain(
+                    response.links_parsed,
+                    response.parsed or ()):
+                # Put together a url object with all the info that
+                # we have ad that tests can use.
+                try:
+                    link = URL(link, **opts)
+                except urlnorm.InvalidUrl:
+                    continue
+                link.set_previous(url)
+                self._url_queue.appendleft(link)
 
 
