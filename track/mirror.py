@@ -122,6 +122,7 @@ import hashlib
 import shelve
 from urllib.parse import urlparse
 import itertools
+import urlnorm
 from track.parser import get_parser_for_mimetype
 from track.spider import get_content_type, Link
 
@@ -397,7 +398,10 @@ class Mirror(object):
 
             def replace_link(url):
                 # Abuse the URL class to normalize the url for matching
-                link = Link(url)
+                try:
+                    link = Link(url)
+                except urlnorm.InvalidUrl:
+                    return
                 url = link.url
 
                 # See what we know about this link. Is the target url
