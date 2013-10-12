@@ -366,10 +366,10 @@ class Spider(object):
                 # Put together a url object with all the info that
                 # we have ad that tests can use.
                 try:
-                    link = Link(url, **opts)
+                    new_link = Link(url, **opts)
                 except urlnorm.InvalidUrl:
                     continue
-                link.set_previous(link)
-                self._link_queue.appendleft(link)
+                new_link.set_previous(link)
+                self._link_queue.appendleft(new_link)
 
 
