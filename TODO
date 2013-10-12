@@ -24,7 +24,7 @@ download.php redirect. Possibly interesting things with looking at mimetpes
 Think about how to handle content-disposition headers.
 
 Currently updating a mirror looks at etags and last-modified, but does not
-consider expires headers. Do this, possibly via a --trsut-expires option.
+consider expires headers. Do this, possibly via a --trust-expires option.
 
 Currently we can "--update" a mirror, which can be used to continue an
 aborted mirror as well. However, this still requires a lot of HEAD requests
