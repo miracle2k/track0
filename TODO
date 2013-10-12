@@ -1,3 +1,8 @@
+Support referers.
+
+When say a link tag defines a file as text/css, we could use this to save
+us a potential HEAD request when the content type is needed.
+
 Currently, urls returning error codes are ignored. We might want to implement
 these as implicit default tests, i.e. -code>=400, such that a user may override
 this using +code=404.
