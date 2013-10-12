@@ -1,5 +1,17 @@
-from track.cli import TestImpl, OperatorImpl
+from tests.helpers import internet
+from track.cli import TestImpl, OperatorImpl, CLIRules, Script
 from track.spider import Link
+
+# Import fixtures
+from .helpers import spider, spiderfactory
+
+
+def testable_cli_rules(**args):
+    """Return a CLIRules instance that uses our test internet."""
+    from .helpers import rules
+    cli_rules = CLIRules(Script.get_default_namesspace(**args))
+    cli_rules.configure_session = lambda s: rules.configure_session(cli_rules, s)
+    return cli_rules
 
 
 class TestRules(object):
@@ -61,6 +73,33 @@ class TestRules(object):
 
         assert test('http://www.example.org/path/?a=1&b=2') == 'a=1&b=2'
         assert test('http://www.example.org/path/') == ''
+
+
+def test_requisite_test(spiderfactory):
+    """The requisite test is special in that it interacts with the
+    mirror itself to know which urls have been saved.
+    """
+    with internet(**{
+            'bar': dict(stream='<link rel="stylesheet" href="/foo" />'),
+            'foo': dict(),
+        }) as uris:
+            # Under normal circumstances the requisite test will
+            # pull in the stylesheet
+            spider = spiderfactory()
+            spider.rules = testable_cli_rules(follow=['+requisite'])
+            spider.add(uris[0])
+            spider.loop()
+            assert len(spider.mirror.stored_urls) == 2
+
+            # However, if we refuse the save the document, the requisite
+            # doesn't count either.
+            spider = spiderfactory()
+            spider.rules = testable_cli_rules(
+                follow=['+requisite'],
+                save=['-path=/foo'])
+            spider.add(uris[0])
+            spider.loop()
+            assert len(spider.mirror.stored_urls) == 0
 
 
 class TestOperators(object):

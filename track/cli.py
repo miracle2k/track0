@@ -1,5 +1,6 @@
 from contextlib import closing
 import hashlib
+import inspect
 import numbers
 import shelve
 import string
@@ -26,12 +27,29 @@ class TestImpl(object):
         return True
 
     @staticmethod
-    def requisite(url):
+    def requisite(link, ctx):
         """Passes if the url is necessary to display a page that has
         been saved. This includes images, stylesheets script files, but
         also things that are more rare, like iframes or embeds.
         """
-        return url.info.get('inline', False)
+        if not link.info.get('inline', False):
+            return False
+
+        if not link.previous:
+            return False
+
+        # The link that was inlining this must have been saved.
+        #
+        # You might question whether it is correct to intermix the concepts
+        # of "url" and "link" here. I believe the answer is yes, because for
+        # each unique url only one link will ever be processed anyway. I.e.
+        # there is no way that previous.url will ever NOT be the one that
+        # was saved to the mirror. So there is no way a different
+        # previous.url could con us into accepting a requirement.
+        if not link.previous.url in ctx['spider'].mirror.encountered_urls:
+            return False
+
+        return True
 
     @staticmethod
     def depth(link):
@@ -532,14 +550,20 @@ class CLIRules(Rules):
             return getattr(test, name, None)
         return test
 
-    def _run_test(self, test, op, value, link):
+    def _run_test(self, test, op, value, link, ctx):
         """Run a test, return True or False.
         """
-        test_result = test(link)
+        args = [link]
+        if len(inspect.getargspec(test).args) == 2:
+            args.append(ctx)
+        test_result = test(*args)
         return Operators[op](test_result, value)
 
-    def _apply_rules(self, rules, link):
+    def _apply_rules(self, rules, link, spider):
         result = self.rule_default
+        ctx = {
+            'spider': spider
+        }
         # We are are simply processing the rules from left to right, but
         # since the right-most rules take precedence, it would be smarter
         # to to the other direction. The reason we aren't doing that is
@@ -549,7 +573,7 @@ class CLIRules(Rules):
         # cause a HEAD request, or worse, a full download.
         for (action, is_stop_action), test, op, value in rules:
             try:
-                passes = self._run_test(test, op, value, link)
+                passes = self._run_test(test, op, value, link, ctx)
                 if passes:
                     result = action
                     if is_stop_action:  # ++ or --
@@ -567,14 +591,14 @@ class CLIRules(Rules):
                 result = True
         return result
 
-    def follow(self, link):
-        return self._apply_rules(self.follow_rules, link)
+    def follow(self, link, spider):
+        return self._apply_rules(self.follow_rules, link, spider)
 
-    def save(self, link):
-        return self._apply_rules(self.save_rules, link)
+    def save(self, link, spider):
+        return self._apply_rules(self.save_rules, link, spider)
 
-    def stop(self, link):
-        return self._apply_rules(self.stop_rules, link)
+    def stop(self, link, spider):
+        return self._apply_rules(self.stop_rules, link, spider)
 
     def configure_session(self, session):
         user_agent = UserAgents.get(

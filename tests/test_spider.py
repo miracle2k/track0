@@ -1,19 +1,10 @@
 import pytest
-from .helpers import TestableSpider, MemoryMirror, rules, internet, arglogger
+from .helpers import rules, internet, arglogger
+from tests.test_cli import testable_cli_rules
 from track.cli import CLIRules, Script
 
-
-@pytest.fixture(scope='function')
-def spider(**kwargs):
-    defaults = dict(rules=rules(), mirror=MemoryMirror())
-    defaults.update(kwargs)
-    spider = TestableSpider(**defaults)
-    return spider
-
-
-@pytest.fixture(scope='session')
-def spiderfactory():
-    return spider
+# Import fixtures
+from .helpers import spider, spiderfactory
 
 
 class TestNormalizeUrl:
@@ -190,13 +181,7 @@ class TestRedirects:
                     headers={'Location': 'http://example.org/bar'}),
             'http://example.org/bar': dict(headers={'content-length': 5*1024*1024*1024})
         }):
-            args = Script.get_default_namesspace()
-            args.follow = ['-', '+size>1m']
-
-            # Make a CLIRules instance that uses the test internet
-            cli_rules = CLIRules(args)
-            cli_rules.configure_session = lambda s: rules.configure_session(cli_rules, s)
-
+            cli_rules = testable_cli_rules(follow=['-', '+size>1m'])
             spider = spiderfactory(rules=cli_rules)
 
             spider.add('http://example.org/foo', source=None)

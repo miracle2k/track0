@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from io import StringIO, BytesIO, TextIOWrapper
+import pytest
 import requests.adapters
 from requests_testadapter import TestSession, Resp
 from track.spider import Spider as BaseSpider, Rules as BaseRules
@@ -102,19 +103,19 @@ class rules(BaseRules):
         self._save = save
         self._stop = stop
 
-    def save(self, url):
+    def save(self, link, spider):
         if callable(self._save):
-            return self._save(url)
+            return self._save(link)
         return bool(self._save)
 
-    def follow(self, url):
+    def follow(self, link, spider):
         if callable(self._follow):
-            return self._follow(url)
+            return self._follow(link)
         return bool(self._follow)
 
-    def stop(self, url):
+    def stop(self, link, spider):
         if callable(self._stop):
-            return self._stop(url)
+            return self._stop(link)
         return bool(self._stop)
 
     def configure_session(self, session):
@@ -207,3 +208,16 @@ class arglogger:
         return self.return_value
     def arg(self, idx):
         return [args[idx] for args, kwargs in self.calls]
+
+
+@pytest.fixture(scope='function')
+def spider(**kwargs):
+    defaults = dict(rules=rules(), mirror=MemoryMirror())
+    defaults.update(kwargs)
+    spider = TestableSpider(**defaults)
+    return spider
+
+
+@pytest.fixture(scope='session')
+def spiderfactory():
+    return spider

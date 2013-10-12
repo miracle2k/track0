@@ -21,17 +21,17 @@ class Rules(object):
     when to save a file locally etc.
     """
 
-    def follow(self, link):
+    def follow(self, link, spider):
         """Return ``True`` if the spider should follow this link.
         """
         raise NotImplementedError()
 
-    def save(self, link):
+    def save(self, link, spider):
         """Return ``True`` if the link should be saved locally.
         """
         raise NotImplementedError()
 
-    def stop(self, page):
+    def stop(self, page, spider):
         """Return ``False`` if the links of a page should not be followed.
 
         The difference to :meth:`follow` is that this runs after
@@ -276,7 +276,7 @@ class Spider(object):
         link.session = self.session
 
         # Test whether this is a link that we should even follow
-        if link.source != 'user' and not self.rules.follow(link):
+        if link.source != 'user' and not self.rules.follow(link, self):
             return
 
         # Before we download that document, check if it is already in
@@ -334,7 +334,7 @@ class Spider(object):
         # Save the file locally?
         if self.mirror:
             if not response_was_304:
-                if self.rules.save(link):
+                if self.rules.save(link, self):
                     self.mirror.add(link, response)
             else:
                 # Mirror still needs to know we found this url so
@@ -346,7 +346,7 @@ class Spider(object):
 
         # Run a hook that makes it possible to stop now and ignore
         # all the urls contained in this page.
-        if self.rules.stop(link):
+        if self.rules.stop(link, self):
             return
 
         # Process follow up links.
