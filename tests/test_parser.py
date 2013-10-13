@@ -51,6 +51,11 @@ class TestHTMLParser(object):
         assert urls[0] == 'http://example.org/home.css'
         assert opts[0].get('inline') is True
 
+    def test_ie_conditional_comments(self):
+        assert self.urls(b"""<!--[if IE 6]>
+        <link href="home.css" rel="stylesheet" />
+        <![endif]-->""") == ['http://example.org/home.css']
+
     def test_base(self):
         assert self.urls(b"""
         <base href="/bar/">

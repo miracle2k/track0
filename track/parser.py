@@ -215,10 +215,11 @@ class HTMLTokenizer(Parser):
             # Skip any comments. Don't even bother implementing strict
             # SGML comments, but do pay attention to IE conditionals.
             if match('<!--'):
-                while cur() is not None:
-                    if match('-->'):
-                        break
-                    next()
+                if not match('[if IE '):
+                    while cur() is not None:
+                        if match('-->'):
+                            break
+                        next()
 
             # A new tag
             if cur() == '<':
