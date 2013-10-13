@@ -26,13 +26,16 @@ setup(
     packages=['track'],
     install_requires=[
         'requests',
-        'urlnorm>=1.1.2',
+        'urlnorm==custom,>=1.1.2',
         'charade'
     ],
     test_requires=[
         'pytest',
         'requests-testadapter'
     ],
-    entry_points="""[console_scripts]\ntrack = track.cli:run\n"""
+    dependency_links=[
+        'https://github.com/miracle2k/urlnorm/archive/python3.zip#egg=urlnorm-custom',
+    ],
+    entry_points="""[console_scripts]\ntrack = track.cli:run\n""",
 )
 
