@@ -360,7 +360,10 @@ class Spider(object):
         # can tell us the urls that this page is pointing to.
         if response_was_304:
             for link_url, info in self.mirror.url_info[link.url]['links']:
-                link = Link(link_url, previous=link, **info)
+                try:
+                    link = Link(link_url, previous=link, **info)
+                except urlnorm.InvalidUrl:
+                    continue
                 self._link_queue.appendleft(link)
 
         else:
