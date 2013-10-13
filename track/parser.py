@@ -497,7 +497,7 @@ class HTMLParser(HTMLTokenizer):
         url = attrs.get('href')
         if not url:
             return
-        rel = attrs.get('rel')
+        rel = attrs.get('rel', '')
         is_inline = self.is_inline_link_rel(rel)
         yield url, \
               {'inline': is_inline}, \
