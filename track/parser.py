@@ -386,10 +386,10 @@ class HTMLParser(HTMLTokenizer):
         elements = list(elements)
 
         # Search for the base tag first
-        base_url = None
+        doc_base_url = None
         for e in elements:
             if e['type'] == 'attr-value' and e['attr_name'] == 'href' and e['tag_name'] == 'base':
-                base_url = e['value']
+                doc_base_url = e['value']
                 break
 
         for element in elements:
@@ -412,8 +412,8 @@ class HTMLParser(HTMLTokenizer):
                     continue
 
                 url = value.strip()
-                if base_url:
-                    url = urljoin(base_url, url)
+                if doc_base_url:
+                    url = urljoin(doc_base_url, url)
                 options = {
                     'inline': self.tags[tag].get('inline', False),
                     'tag': '{0}.{1}'.format(tag, attr)
