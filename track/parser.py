@@ -506,9 +506,13 @@ class HTMLParser(HTMLTokenizer):
     def _handle_tag_form(self, attrs, tokens):
         """Handle the <form> tag.
         """
-        # We currently skip forms completely. It might be worth looking
-        # into our options here.
-        yield from ()
+        url = attrs.get('action')
+        if not url:
+            return
+        # Return the action url, but flag it as a no follow. The
+        # spider won't download it, but the mirror will replace it.
+        yield url, {'do-not-follow': True}, \
+              'action', self._mk_attr_setter(tokens['action'])
 
     def _handle_tag_meta(self, attrs, tokens):
         """Handle the <meta> tag. Can look like this:

@@ -39,6 +39,13 @@ class TestHTMLParser(object):
         parser = HTMLParser(html, 'http://example.org')
         return parser.replace_urls(replacer)
 
+    def test_form_action(self):
+        urls, opts = self.urls_with_opts(b"""
+            <form action="foo">""")
+        assert urls[0] == 'http://example.org/foo'
+        assert not opts[0].get('inline')
+        assert opts[0].get('do-not-follow') is True
+
     def test_external_stylesheet(self):
         urls, opts = self.urls_with_opts(b"""
             <link href="home.css" rel="stylesheet" />""")

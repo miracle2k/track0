@@ -268,6 +268,10 @@ class Spider(object):
     def process_one(self):
         link = self._link_queue.pop()
 
+        # Some links we are not supposed to follow, like <form action=>
+        if link.info.get('do-not-follow'):
+            return
+
         # Do not bother to process the same url twice
         if link.url in self._known_urls:
             return
