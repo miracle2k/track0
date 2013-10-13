@@ -440,7 +440,8 @@ class HTMLParser(HTMLTokenizer):
 
                 # If it is a style attribute, return a nested parser
                 if attr == 'style':
-                    yield CSSParser(value, url=self.base_url), \
+                    yield CSSParser(
+                            value, url=urljoin(self.base_url, doc_base_url)), \
                           {'escape': 'single'}, \
                           self._mk_attr_setter(element)
 
@@ -492,6 +493,7 @@ class HTMLParser(HTMLTokenizer):
                     continue
 
                 for subparser in handler(data):
+                    subparser.base_url = urljoin(subparser.base_url, doc_base_url)
                     # Do not wrap the <style> tag in quotes (quote=False)
                     yield subparser, {}, \
                           self._mk_attr_setter(element, quote=False)

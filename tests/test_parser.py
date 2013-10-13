@@ -56,7 +56,6 @@ class TestHTMLParser(object):
             lambda s: 'foo.html') ==\
                 b"""<meta http-equiv="refresh" content="10; url=index.html">"""
 
-
     def test_external_stylesheet(self):
         urls, opts = self.urls_with_opts(b"""
             <link href="home.css" rel="stylesheet" />""")
@@ -85,6 +84,13 @@ class TestHTMLParser(object):
         assert self.urls(b"""
         <base href="/bar/">
         <a href="foo">""") == ['http://example.org/bar/foo']
+
+    def test_base_with_inline_css(self):
+        assert self.urls(b"""
+        <base href="http://elsdoerfer.name">
+        <a style="background-image: url('foo.gif')">
+        <style> background-image: url('bar.gif')</style>
+        """) == ['http://elsdoerfer.name/foo.gif', 'http://elsdoerfer.name/bar.gif']
 
     def test_attrs_with_whitespace(self):
         assert self.urls(b"""<a href="
