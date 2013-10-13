@@ -69,5 +69,14 @@ class TestHTMLParser(object):
         assert self.replace(doc, lambda u: 'bar.gif') == \
             b"""<html style="background-image: url('bar.gif')">"""
 
+    def test_style_tag(self):
+        doc = b"""<style>h1 { background-image: url('foo.png') }</style>"""
+        urls, opts = self.urls_with_opts(doc)
+        assert urls[0] == 'http://example.org/foo.png'
+        assert opts[0].get('inline') is True
+
+        assert self.replace(doc, lambda u: 'bar.gif') == \
+            b"""<style>h1 { background-image: url("bar.gif") }</style>"""
+
 
 

@@ -311,6 +311,7 @@ class HTMLTokenizer(Parser):
                                 if cur() in ('\t\r\n />='):
                                     with p.jump(last_pos_before_match):
                                         yield p.switch_element(
+                                            name=tag_name,
                                             type='tag-rawtext')
                                     break
                             next()
@@ -348,6 +349,7 @@ class HTMLParser(HTMLTokenizer):
         'input': {'attr': ['src'], 'inline': True},
         'layer': {'attr': ['src'], 'inline': True},
         'meta': {},
+        'style': {},
         'object': {'attr': ['data'], 'inline': True},
         'overlay': {'attr': ['src'], 'inline': True},
         'table': {'attr': ['background'], 'inline': True},
@@ -358,10 +360,10 @@ class HTMLParser(HTMLTokenizer):
     def replace_urls(self, replacer):
         elements = list(self._parse())
 
-        for url, _, setter in self._iter_urls(elements):
+        for url, kwargs, setter in self._iter_urls(elements):
             if isinstance(url, Parser):
                 parser = url
-                setter(parser.replace_urls(replacer, single_quotes=True))
+                setter(parser.replace_urls(replacer, **kwargs))
             else:
                 new_url = replacer(self.absurl(url))
                 if new_url:
@@ -400,7 +402,8 @@ class HTMLParser(HTMLTokenizer):
 
                 # If it is a style attribute, return a nested parser
                 if attr == 'style':
-                    yield CSSParser(value, url=self.base_url), None, \
+                    yield CSSParser(value, url=self.base_url), \
+                          {'escape': 'single'}, \
                           self._mk_attr_setter(element)
 
                 # See if this is in the list of attributes
@@ -420,12 +423,11 @@ class HTMLParser(HTMLTokenizer):
                 }
                 yield url, options, self._mk_attr_setter(element)
 
-            # See if there is a handler for this tag
+            # See if this is a tag we have a handler for
             if element['type'] == 'tag-open-end':
                 tag, attrs = element['name'], element['attrs']
                 if not tag in self.tags:
                     continue
-
                 handler = getattr(self, '_handle_tag_{}'.format(tag), False)
                 if not handler:
                     continue
@@ -442,14 +444,37 @@ class HTMLParser(HTMLTokenizer):
                     options.update({'tag': '{0}.{1}'.format(tag, attr_name)})
                     yield url.strip(), options, setter
 
-    def _mk_attr_setter(self, element, single=False):
-        """Return a function that will set a new attribute on a token."""
+            # See if this is tag content that we have a handler for
+            if element['type'] == 'tag-rawtext':
+                tag, data = element['name'], element['data']
+                if not tag in self.tags:
+                    continue
+                handler = getattr(self, '_handle_text_{}'.format(tag), False)
+                if not handler:
+                    continue
+
+                for subparser in handler(data):
+                    # Do not wrap the <style> tag in quotes (quote=False)
+                    yield subparser, {}, \
+                          self._mk_attr_setter(element, quote=False)
+
+    def _mk_attr_setter(self, element, quote='double'):
+        """Return a function that will set a new value on a attr-value token.
+
+        Can optionally wrap the value in quotes and escape it.
+        """
         def setter(new_value):
-            if single:
-                element['data'] = "'{}'".format(new_value.replace("'", '&#39;'))
-            else:
-                element['data'] = '"{}"'.format(new_value.replace('"', '&quot;'))
+            fmt = {'single': "'{}'", 'double': '"{}"', False: "{}"}[quote]
+            if quote == 'single':
+                new_value = new_value.replace("'", '&#39;')
+            elif quote == 'double':
+                new_value = new_value.replace('"', '&quot;')
+
+            element['data'] = fmt.format(new_value)
         return setter
+
+    def _handle_text_style(self, text):
+        yield CSSParser(text, url=self.base_url)
 
     def _handle_tag_link(self, attrs, tokens):
         """Handle the <link> tag. There are different types:
@@ -531,17 +556,19 @@ class CSSParser(Parser):
     This currently doesn't do (2) or (3).
     """
 
-    def replace_urls(self, replacer, single_quotes=False):
+    def replace_urls(self, replacer, escape='double'):
         elements = list(self._parse())
 
         for element in elements:
             if element['type'] == 'url':
                 new_url = replacer(self.absurl(element['url']))
                 if new_url:
-                    if single_quotes:
+                    if escape == 'single':
                         element['data'] = "'{0}'".format(new_url.replace("'", "\\'"))
-                    else:
+                    elif escape == 'double':
                         element['data'] = '"{0}"'.format(new_url.replace('"', '\\"'))
+                    else:
+                        element['data'] = '{0}'.format(new_url)
 
         return self.same_as_input(''.join([el['data'] for el in elements]))
 
