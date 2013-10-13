@@ -569,14 +569,19 @@ class HTMLParser(HTMLTokenizer):
 
         elif http_equiv == 'refresh':
             content = attrs.get('content', '')
-            match = re.match(r'url=(.*)', content, re.IGNORECASE)
+            match = re.match(r'(.*?)url=(.*)', content, re.IGNORECASE)
             if match:
-                # TODO: replacing this link is harder
+                # Create a setter that will keep the syntax sugar around
+                attr_setter = self._mk_attr_setter(tokens['content'])
+                def setter(new_url):
+                    attr_setter('{0}url={1}'.format(*match.groups()))
+
                 yield \
-                    match.groups(0), \
+                    match.groups()[1], \
                     {}, \
                     'content', \
-                    self._mk_attr_setter(tokens['content'])
+                    setter
+
 
     @classmethod
     def is_inline_link_rel(cls, rel):

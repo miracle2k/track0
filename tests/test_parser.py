@@ -45,6 +45,18 @@ class TestHTMLParser(object):
         assert not opts[0].get('inline')
         assert opts[0].get('do-not-follow') is True
 
+    def test_meta_refresh(self):
+        urls, opts = self.urls_with_opts(
+            b"""<meta http-equiv="refresh" content="10; url=index.html">""")
+        assert urls[0] == 'http://example.org/index.html'
+        assert not opts[0].get('inline')
+
+        assert self.replace(
+            b"""<meta http-equiv="refresh" content="10; url=index.html">""",
+            lambda s: 'foo.html') ==\
+                b"""<meta http-equiv="refresh" content="10; url=index.html">"""
+
+
     def test_external_stylesheet(self):
         urls, opts = self.urls_with_opts(b"""
             <link href="home.css" rel="stylesheet" />""")
