@@ -32,8 +32,12 @@ class TestHTMLParser(object):
         return [url for url, opts in HTMLParser(html, 'http://example.org')]
 
     def urls_with_opts(self, html):
-        result = HTMLParser(html, 'http://example.org')
-        return [r[0] for r in result], [r[1] for r in result]
+        parser = HTMLParser(html, 'http://example.org')
+        return [r[0] for r in parser], [r[1] for r in parser]
+
+    def replace(self, html, replacer):
+        parser = HTMLParser(html, 'http://example.org')
+        return parser.replace_urls(replacer)
 
     def test_external_stylesheet(self):
         urls, opts = self.urls_with_opts(b"""
@@ -55,6 +59,15 @@ class TestHTMLParser(object):
     def test_attrs_with_whitespace(self):
         assert self.urls(b"""<a href="
         /foo">""") == ['http://example.org/foo']
+
+    def test_style_attribute(self):
+        doc = b"""<html style="background-image: url('foo.png')">"""
+        urls, opts = self.urls_with_opts(doc)
+        assert urls[0] == 'http://example.org/foo.png'
+        assert opts[0].get('inline') is True
+
+        assert self.replace(doc, lambda u: 'bar.gif') == \
+            b"""<html style="background-image: url('bar.gif')">"""
 
 
 

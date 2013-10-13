@@ -43,6 +43,11 @@ class Parser(object):
             return data
         return data.decode(self.encoding or 'utf-8')
 
+    def same_as_input(self, data):
+        if isinstance(self.data, bytes):
+            return self.as_bytes(data)
+        return self.as_text(data)
+
     def __iter__(self):
         for url, opts in self.get_urls():
             yield self.absurl(url), opts
@@ -354,9 +359,13 @@ class HTMLParser(HTMLTokenizer):
         elements = list(self._parse())
 
         for url, _, setter in self._iter_urls(elements):
-            new_url = replacer(self.absurl(url))
-            if new_url:
-                setter(new_url)
+            if isinstance(url, Parser):
+                parser = url
+                setter(parser.replace_urls(replacer, single_quotes=True))
+            else:
+                new_url = replacer(self.absurl(url))
+                if new_url:
+                    setter(new_url)
 
         new_data = ''.join([el['data'] for el in elements])
         return self.as_bytes(new_data)
@@ -364,7 +373,12 @@ class HTMLParser(HTMLTokenizer):
     def get_urls(self):
         elements = self._parse()
         for url, opts, _ in self._iter_urls(elements):
-            yield self.absurl(url), opts
+            if isinstance(url, Parser):
+                parser = url
+                for nested_url, opts in parser:
+                    yield self.absurl(nested_url), opts
+            else:
+                yield self.absurl(url), opts
 
     def _iter_urls(self, elements):
         """Find the urls within the token stream.
@@ -383,6 +397,13 @@ class HTMLParser(HTMLTokenizer):
             if element['type'] == 'attr-value':
                 tag, attr, value = \
                     element['tag_name'], element['attr_name'], element['value']
+
+                # If it is a style attribute, return a nested parser
+                if attr == 'style':
+                    yield CSSParser(value, url=self.base_url), None, \
+                          self._mk_attr_setter(element)
+
+                # See if this is in the list of attributes
                 if not tag in self.tags:
                     continue
                 if not attr in self.tags[tag].get('attr', []):
@@ -421,10 +442,13 @@ class HTMLParser(HTMLTokenizer):
                     options.update({'tag': '{0}.{1}'.format(tag, attr_name)})
                     yield url.strip(), options, setter
 
-    def _mk_attr_setter(self, element):
+    def _mk_attr_setter(self, element, single=False):
         """Return a function that will set a new attribute on a token."""
         def setter(new_value):
-            element['data'] = '"{}"'.format(new_value.replace('"', '&quot;'))
+            if single:
+                element['data'] = "'{}'".format(new_value.replace("'", '&#39;'))
+            else:
+                element['data'] = '"{}"'.format(new_value.replace('"', '&quot;'))
         return setter
 
     def _handle_tag_link(self, attrs, tokens):
@@ -507,16 +531,19 @@ class CSSParser(Parser):
     This currently doesn't do (2) or (3).
     """
 
-    def replace_urls(self, replacer):
+    def replace_urls(self, replacer, single_quotes=False):
         elements = list(self._parse())
 
         for element in elements:
             if element['type'] == 'url':
                 new_url = replacer(self.absurl(element['url']))
                 if new_url:
-                    element['data'] = '"{0}"'.format(new_url.replace('"', '\\"'))
+                    if single_quotes:
+                        element['data'] = "'{0}'".format(new_url.replace("'", "\\'"))
+                    else:
+                        element['data'] = '"{0}"'.format(new_url.replace('"', '\\"'))
 
-        return self.as_bytes(''.join([el['data'] for el in elements]))
+        return self.same_as_input(''.join([el['data'] for el in elements]))
 
     def get_urls(self):
         elements = self._parse()
