@@ -341,18 +341,19 @@ class HTMLTokenizer(Parser):
 
                     if tag_name in ('style', 'script'):
                         yield p.switch_element()
+                        last_pos_before_match = p.pos
                         while cur():
-                            last_pos_before_match = p.pos
-
                             # http://dev.w3.org/html5/spec-LC/tokenization.html#rawtext-end-tag-name-state
                             if match('</{}'.format(tag_name)):
                                 if cur() in ('\t\r\n />='):
-                                    with p.jump(last_pos_before_match):
-                                        yield p.switch_element(
-                                            name=tag_name,
-                                            type='tag-rawtext')
                                     break
                             next()
+                            last_pos_before_match = p.pos
+
+                        with p.jump(last_pos_before_match):
+                            yield p.switch_element(
+                                name=tag_name,
+                                type='tag-rawtext')
 
                     # do not skip a char
                     continue
