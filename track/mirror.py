@@ -391,7 +391,7 @@ class Mirror(object):
         if not parser_class:
             return
 
-        with self.open(file, 'r+') as f:
+        with self.open(file, 'rb+') as f:
             # A simple way to speed this up would also be to keep a
             # certain contingent of previously-parsed documents in memory.
             parsed = parser_class(f.read(), url)

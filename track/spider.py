@@ -326,7 +326,8 @@ class Spider(object):
         # the @stop rules pass. Or we might get away without parsing.
         parser_class = get_parser_for_mimetype(get_content_type(response))
         if parser_class:
-            response.parsed = parser_class(response.text, response.url)
+            response.parsed = parser_class(response.content, response.url,
+                                           encoding=response.encoding)
         else:
             response.parsed = None
         response.links_parsed = HeaderLinkParser(response)

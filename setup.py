@@ -25,7 +25,6 @@ setup(
     license='BSD',
     packages=['track'],
     install_requires=[
-        'beautifulsoup4',
         'requests',
         'urlnorm>=1.1.2'
     ],
