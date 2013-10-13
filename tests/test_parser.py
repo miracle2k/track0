@@ -38,6 +38,11 @@ class TestHTMLParser(object):
         parser = HTMLParser(html, 'http://example.org')
         return parser.replace_urls(replacer)
 
+    def test_entities(self):
+        urls, opts = self.urls_with_opts(b"""
+            <a href="f&quot;oo">""")
+        assert urls[0] == 'http://example.org/f"oo'
+
     def test_form_action(self):
         urls, opts = self.urls_with_opts(b"""
             <form action="foo">""")

@@ -6,6 +6,7 @@ of the spidering process.
 """
 
 import contextlib
+import html.parser
 import re
 import string
 from urllib.parse import urljoin
@@ -185,6 +186,9 @@ class ParserKit:
             return old_element
 
 
+entity_unescape = html.parser.HTMLParser().unescape
+
+
 class HTMLTokenizer(Parser):
     """With a heavy heart, I'm implementing a very simple HTML scanner
     myself. The problem with all existing HTML parsers is that they cannot
@@ -301,6 +305,10 @@ class HTMLTokenizer(Parser):
                                 # http://dev.w3.org/html5/spec-LC/tokenization.html#attribute-value-single-quoted-state
                                 quote_char = next()
                                 attr_value = p.skip_until(quote_char)
+                                # Instead of following the huge tokenization
+                                # process for entities (html5lib.HTMLTokenizer.consumeEntity),
+                                # just replace them afterwards.
+                                attr_value = entity_unescape(attr_value)
                                 next()
                             else:
                                 # http://dev.w3.org/html5/spec-LC/tokenization.html#attribute-value-unquoted-state
