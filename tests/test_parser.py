@@ -25,7 +25,6 @@ class TestCSSParser(object):
                 'url with double quotes'] == [url for url, _ in css]
 
 
-
 class TestHTMLParser(object):
 
     def urls(self, html):

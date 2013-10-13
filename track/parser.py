@@ -475,6 +475,7 @@ class HTMLParser(HTMLTokenizer):
         return setter
 
     def _handle_text_style(self, text):
+        """Contents of a <style> tag."""
         yield CSSParser(text, url=self.base_url)
 
     def _handle_tag_link(self, attrs, tokens):
