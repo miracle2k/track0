@@ -26,7 +26,8 @@ setup(
     packages=['track'],
     install_requires=[
         'requests',
-        'urlnorm>=1.1.2'
+        'urlnorm>=1.1.2',
+        'charade'
     ],
     test_requires=[
         'pytest',
