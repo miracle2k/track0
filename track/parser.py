@@ -492,7 +492,7 @@ class HTMLParser(HTMLTokenizer):
         be treated as inline. Note that a rel may have multiple values.
         """
         rel = list(map(lambda s: s.strip(), rel.split(' ')))
-        return rel == ['stylesheet'] or 'icon' in rel
+        return 'stylesheet' in rel or 'icon' in rel
 
 
 class CSSParser(Parser):
