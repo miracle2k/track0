@@ -259,6 +259,7 @@ class Mirror(object):
         url_info = {
             'mimetype': get_content_type(response),
             'etag': response.headers.get('etag'),
+            'encoding': response.encoding,
             'last-modified': response.headers.get('last-modified'),
             'links': []
         }
@@ -394,7 +395,8 @@ class Mirror(object):
         with self.open(file, 'rb+') as f:
             # A simple way to speed this up would also be to keep a
             # certain contingent of previously-parsed documents in memory.
-            parsed = parser_class(f.read(), url)
+            parsed = parser_class(
+                f.read(), url, encoding=self.url_info[url].get('encoding'))
 
             def replace_link(url):
                 # Abuse the URL class to normalize the url for matching

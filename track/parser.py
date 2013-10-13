@@ -20,9 +20,40 @@ class Parser(object):
     Some parsers will need to support both byte and string input, while
     others may be fine with either one, depending on what use cases they
     need to provide.
-    However, it has to always return the urls as decoded strings, as well
-    as in absolute form.
-    This base class provides some tools to help with that.
+
+    Generally however, two rules should apply:
+
+        1. The parsed urls are exposed as text strings in both
+           :meth:`get_urls` and :meth:`replace_links`.
+
+        2. replace_links() should return the same datatype as the
+           input that was given.
+
+    Further, all urls are to be returned in absolute form relate to the
+    given base url.
+
+    How to deal with encodings
+    --------------------------
+
+    We need not just decode a file, we also need to make changes. There
+    are really two feasable approaches:
+
+    1) parse everything in bytes, relying on ASCII being a common subset.
+       when inserting a url, use ascii-only, and encode anything else.
+
+    2) decode on open, parse in strings, encode to original encoding again
+       on save.
+
+    ==> Currently we use (2), maybe just because it seems easier to transform
+        on load/save, than everytime we insert a url.
+
+    The transport encoding is a bit of a challenge as well. For our own
+    purposes, we can store it and keep it around. However, if the user opens
+    the local file, the browser would use the encoding from within the file,
+    which could possibly be incorrect. It is to be considered if the
+    declared encoding of the local file should be adjusted; or,
+    alternatively, the local file should be re-encoded to match the declared
+    encoding.
     """
 
     def __init__(self, data, url, encoding=None):
@@ -184,7 +215,14 @@ class HTMLTokenizer(Parser):
 
     asciiLetters = frozenset(string.ascii_letters)
 
-    def _detect_encoding(self):
+    def __init__(self, data, url, encoding=None):
+        # If no transport-level encoding as specified, try to find one
+        # within the HTML, or fall back to utf-8 as default.
+        if not encoding:
+            encoding = self._detect_encoding(data) or 'utf-8'
+        Parser.__init__(self, data, url, encoding)
+
+    def _detect_encoding(self, data):
         # Use a simple way to detect the encoding beforehand. This will
         # try chardet and the BOM, but also scan some initial bytes for
         # a metatag.
@@ -193,14 +231,13 @@ class HTMLTokenizer(Parser):
         # during the parsing, and the html stream class has a
         # changeEncoding() method (called by the parser when a meta
         # encoding info is encountered). We  might want to use it.
-        stream = HTMLBinaryInputStream(self.data)
+        stream = HTMLBinaryInputStream(data)
         stream.defaultEncoding = ''
         encoding, certainty = stream.detectEncoding()
         return encoding
 
     def _parse(self):
-        encoding = self.encoding or self._detect_encoding() or 'utf-8'
-        p = ParserKit(self.data.decode(encoding))
+        p = ParserKit(self.as_text(self.data))
 
         peek = p.peek
         cur = p.cur
@@ -371,7 +408,7 @@ class HTMLParser(HTMLTokenizer):
                     setter(new_url)
 
         new_data = ''.join([el['data'] for el in elements])
-        return self.as_bytes(new_data)
+        return self.same_as_input(new_data)
 
     def get_urls(self):
         elements = self._parse()
