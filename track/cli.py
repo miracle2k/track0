@@ -767,6 +767,10 @@ class Script:
             '--no-link-conversion', action='store_true',
             help='do not modify urls in the local copy in any way')
         parser.add_argument(
+            '--backups', action='store_true',
+            help='will store an unmodified copy of each file in a ./backups '
+                 'subfolder; unaffected by link conversion and deletion.')
+        parser.add_argument(
             '--no-live-update', action='store_true',
             help='delay local mirror modifications until the spider is done')
         # Affecting the start urls

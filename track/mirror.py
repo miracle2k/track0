@@ -146,10 +146,12 @@ class Mirror(object):
             return False
         return True
 
-    def __init__(self, directory, write_at_once=True, convert_links=True):
+    def __init__(self, directory, write_at_once=True, convert_links=True,
+                 backups=False):
         self.directory = directory
         self.write_at_once = write_at_once
         self.convert_links = convert_links
+        self.backups = backups
 
         # All urls stored in the mirror.
         # .. is persisted so we know what is in the currently stored in
@@ -251,8 +253,8 @@ class Mirror(object):
         # We also add a copy that will not be affected by any link
         # converting for debugging purposes. It'll allow us to validate
         # via a diff what the conversion is doing.
-        if self.convert_links:
-            with self.open(path.join('.originals', rel_filename), 'wb') as f:
+        if self.backups:
+            with self.open(path.join('.backups', rel_filename), 'wb') as f:
                 f.write(response.content)
 
         # Add to database: data about the url
