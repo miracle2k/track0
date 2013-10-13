@@ -115,6 +115,20 @@ Among the things currently not supported:
     - No support for authentication, HTTP or cookie-based.
     - No fancy (or any) JavaScript parsing.
 
+Why not wget?
+~~~~~~~~~~~~~
+
+wget can recursive download and correct local links accordingly, does
+the job quite well, and has a good API. However, it doesn't quite go
+beyond the downloading to full mirroring: for example, updating an
+existing mirror isn't really something it is designed for (*). Similarly,
+as it lacks the concept of a local mirror, different staring urls are
+not aware of each other.
+
+(*) There is limited support for checking the timestamps of existing
+files, but only if it's links have not been adjusted, or backup copies
+exist.
+
 
 More documentation
 ------------------
