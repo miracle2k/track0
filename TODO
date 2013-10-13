@@ -31,3 +31,6 @@ aborted mirror as well. However, this still requires a lot of HEAD requests
 and a lot of ful GETs as well were a etags/last-modified are not supported.
 A true continue would be able to restore based on the queue itself being
 saved, or a non-HTTP replay of the action through known-links only.
+
+Add wget-like host checking. Possibly we can also do some md5 hasing magic
+to figure out if a www. host is the same.
