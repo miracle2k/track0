@@ -440,7 +440,7 @@ class Mirror(object):
                     # such a way that a match would occur here.
                     if url in self.url_usage:
                         return url
-            new_content = parsed.replace_links(replace_link)
+            new_content = parsed.replace_urls(replace_link)
 
             # Write new file
             f.seek(0)

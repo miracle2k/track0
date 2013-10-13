@@ -12,25 +12,38 @@ from urllib.parse import urljoin
 
 
 class Parser(object):
-    """Parse a file for links.
+    """Base class for what we call a parser, but is really an interface
+    to do two things: (1) find urls in a file and (2) return the file
+    content with certain urls replaced.
+
+    Some parsers will need to support both byte and string input, while
+    others may be fine with either one, depending on what use cases they
+    need to provide.
+    However, it has to always return the urls as decoded strings, as well
+    as in absolute form.
+    This base class provides some tools to help with that.
     """
 
-    def __init__(self, data, url):
+    def __init__(self, data, url, encoding=None):
         self.data = data
         self.base_url = url
+        self.encoding = encoding
 
     def absurl(self, url):
         return urljoin(self.base_url, url)
 
     def __iter__(self):
-        for url, opts in self._get_urls():
+        for url, opts in self.get_urls():
             yield self.absurl(url), opts
 
-    def _get_urls(self):
+    def get_urls(self):
         raise NotImplementedError()
 
-    def replace_links(self, replacer):
-        raise NotImplementedError
+    def replace_urls(self, replacer):
+        """Call replacer for each url. Use the return value as the
+        new url. Return the modified data as a bytes stream.
+        """
+        raise NotImplementedError()
 
 
 class HTMLParser(Parser):
@@ -62,7 +75,7 @@ class HTMLParser(Parser):
         'th': {'attr': ['background'], 'inline': True},
     }
 
-    def replace_links(self, replacer):
+    def replace_urls(self, replacer):
         soup = BeautifulSoup(self.data)
         for url, options, setter in self._get_links_from_soup(soup):
             new_value = replacer(self.absurl(url))
@@ -70,7 +83,7 @@ class HTMLParser(Parser):
                 setter(new_value)
         return str(soup)
 
-    def _get_urls(self):
+    def get_urls(self):
         # TODO: Neither html.parser not html5lib doeskeep the specific
         # whitespace or quoting within attributes, possibly even order
         # is lost. If we want to write out a more exact replica of the
@@ -259,7 +272,7 @@ class ParserKit:
 
 class CSSParser(Parser):
 
-    def replace_links(self, replacer):
+    def replace_urls(self, replacer):
         elements = list(self._parse())
 
         for element in elements:
@@ -270,7 +283,7 @@ class CSSParser(Parser):
 
         return ''.join([el['data'] for el in elements])
 
-    def _get_urls(self):
+    def get_urls(self):
         elements = self._parse()
         for element in elements:
             if element['type'] == 'url':
@@ -350,7 +363,7 @@ class HeaderLinkParser(Parser):
         self.response = response
         Parser.__init__(self, None, response.url)
 
-    def _get_urls(self):
+    def get_urls(self):
         for link in self.response.links.values():
             opts = {
                 'source': 'http-header',
