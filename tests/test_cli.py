@@ -74,6 +74,11 @@ class TestRules(object):
         assert test('http://www.example.org/path/?a=1&b=2') == 'a=1&b=2'
         assert test('http://www.example.org/path/') == ''
 
+    def test_fragment(self):
+        test = lambda a: TestImpl.fragment(Link(a))
+
+        assert test('http://www.example.org/path/#fragment') == 'fragment'
+
 
 def test_requisite_test(spiderfactory):
     """The requisite test is special in that it interacts with the

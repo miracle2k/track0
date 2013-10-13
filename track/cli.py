@@ -291,6 +291,16 @@ class TestImpl(object):
         return link.parsed.query
 
     @staticmethod
+    def fragment(link):
+        """Match against the link fragment.
+
+        For example, if a link on the page is
+        ``http://example.org/foo/#introduction``, the fragment will be
+        ``introduction``.
+        """
+        return link.parsed.fragment
+
+    @staticmethod
     def size(link):
         """Test the size of the document behind a url.
 
@@ -381,6 +391,7 @@ AvailableTests = {
     'filename': TestImpl,
     'extension': TestImpl,
     'querystring': TestImpl,
+    'fragment': TestImpl,
 
     # Operating on URL metadata (headers)
     'content-type': TestImpl,
