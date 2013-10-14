@@ -601,7 +601,8 @@ class HTMLParser(HTMLTokenizer):
         be treated as inline. Note that a rel may have multiple values.
         """
         rel = list(map(lambda s: s.strip(), rel.split(' ')))
-        return 'stylesheet' in rel or 'icon' in rel
+        ident = set(('stylesheet', 'icon', 'apple-touch-icon'))
+        return bool(set(rel) & ident)
 
 
 class CSSParser(Parser):

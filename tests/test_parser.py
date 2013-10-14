@@ -73,6 +73,19 @@ class TestHTMLParser(object):
         assert urls[0] == 'http://example.org/home.css'
         assert opts[0].get('inline') is True
 
+    def test_link_tag_rel(self):
+        urls, opts = self.urls_with_opts(b"""
+            <link href="home.png" rel="icon" />
+            <link href="home.png" rel="alternative icon" />
+            <link href="home.png" rel="something else" />
+            <link href="home.png" rel="apple-touch-icon" />
+        """)
+        assert urls[0] == 'http://example.org/home.png'
+        assert opts[0].get('inline') is True
+        assert opts[1].get('inline') is True
+        assert opts[2].get('inline') is False
+        assert opts[3].get('inline') is True
+
     def test_link_tag_without_rel(self):
         """[regression]"""
         urls, opts = self.urls_with_opts(b"""
