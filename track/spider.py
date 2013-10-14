@@ -7,13 +7,75 @@ import urlnorm
 from track.parser import get_parser_for_mimetype, HeaderLinkParser
 
 
-class Logger(object):
 
+class Events(object):
+    """This is the status notification interface for the spider.
 
-    def link(self, link):
-        """Note a url being processed.
+    A link can either be:
+        on the queue, currently in a processor.
+
+    The processor can put it back on the queue.
+
+    while the processor is running it can attach state to the link.
+
+    TODO: Do we need a separate incremental log which woud include
+      details about tests resolving, sending requests (HEAD etc, calc
+      filename, save); possibly, this could all work through the events
+      interface.
+
+    """
+    def added_to_queue(self, link):
+        """This is called when a link is added to the queue.
+
+        This will usually be a new link, but it is also possible that a
+        processor returns a link to the queue to be tried again later.
         """
-        print('{0}{1}'.format(' '*link.depth, link.url))
+
+    def taken_by_processor(self, link):
+        """Called when a links goes to a processor to be downloaded
+        and saved.
+        """
+
+    def completed(self, link):
+        """Called when a processor is done with the link.
+        """
+
+    def follow_state_changed(self, link, **kwargs):
+        """Notification by the processor in the follow stage.
+
+        This will contain information about whether a link will be
+        downloaded, and whether that succeeds.
+
+        Except dicts like these::
+
+            {'skipped': 'duplicate'}
+            {'failed': 'http-error', response: <response object>}
+
+        Note that in theory, multiple such notifications with different
+        keys may be sent, and it is up to you to make sense of it.
+
+        For example, it is entirely possible that you'll get a
+        ``failed=connection-error`` update, the link is added back to
+        the queue, and yields a ``skipped=rule-deny`` event the next time.
+        """
+
+
+    def save_state_changed(self, link, **kwargs):
+        """Notification by the processor about the save stage.
+
+        At this point, the link has already been downloaded. This will
+        let you know about the saving process.
+        """
+        pass
+
+    def bail_state_changed(self, link, **kwargs):
+        """Notification by the processor about the bail stage.
+
+        Among other things, this will receive a status update informing
+        you of the number of links found::
+
+            {'num_links': 100}
+        """
 
 
 class Rules(object):
@@ -233,12 +295,12 @@ class Spider(object):
     max_retries = 5
     session_class = requests.Session
 
-    def __init__(self, rules, mirror=None):
+    def __init__(self, rules, mirror=None, events=None):
         self._link_queue = deque()
         self._known_urls = []
         self.rules = rules
         self.mirror = mirror
-        self.logger = Logger()
+        self.events = events or Events()
 
     def __len__(self):
         return len(self._link_queue)
@@ -267,13 +329,20 @@ class Spider(object):
 
     def process_one(self):
         link = self._link_queue.pop()
+        self.events.taken_by_processor(link)
+        not_yet_completed = self._process_link(link)
+        if not not_yet_completed:
+            self.events.completed(link)
 
+    def _process_link(self, link):
         # Some links we are not supposed to follow, like <form action=>
         if link.info.get('do-not-follow'):
+            self.events.follow_state_changed(link, skipped='no-download')
             return
 
         # Do not bother to process the same url twice
         if link.url in self._known_urls:
+            self.events.follow_state_changed(link, skipped='duplicate')
             return
 
         # Attach a session to the url so it can resolve itself
@@ -281,6 +350,7 @@ class Spider(object):
 
         # Test whether this is a link that we should even follow
         if link.source != 'user' and not self.rules.follow(link, self):
+            self.events.follow_state_changed(link, skipped='rule-deny')
             return
 
         # Before we download that document, check if it is already in
@@ -292,19 +362,14 @@ class Spider(object):
             modified = self.mirror.url_info[link.url].get('last-modified') or False
 
         # Go ahead with the request
-        self.logger.link(link)
         response = link.resolve('full', etag=etag, last_modified=modified)
         if response is False:
             # This request failed at the connection stage
             if link.retries <= self.max_retries:
                 link = link.retry()
                 self._link_queue.appendleft(link)
-            return
-
-        # If we have received a 304 not modified response, we are happy
-        response_was_304 = response.status_code == 304
-        if response.status_code == 304:
-            print("304")
+                self.events.added_to_queue(link)
+            return True
 
         # If we have been redirected to a different url, add that
         # url to the queue again.
@@ -312,6 +377,7 @@ class Spider(object):
             redir_link = Link(
                 response.redirects[-1].url, previous=link.previous, **link.info)
             self._link_queue.append(redir_link)
+            self.events.added_to_queue(link)
             response.close()
 
             # The mirror needs to know about the redirect. The status
@@ -319,28 +385,42 @@ class Spider(object):
             # (i.e. permanent, temporary etc)
             self.mirror.add_redirect(
                 link, redir_link, response.status_code)
+
+            self.events.follow_state_changed(link, failed='redirect')
             return
 
         # Do not follow errors
         if response.status_code >= 400:
+            self.events.follow_state_changed(link, failed='http-error')
             return
+
+        # If we have received a 304 not modified response, we are happy
+        response_was_304 = response.status_code == 304
+        if response_was_304:
+            self.events.follow_state_changed(link, failed='not-modified')
+        else:
+            self.events.follow_state_changed(link, success=True)
 
         # Attach a link parser now, which will start to work when needed.
         # The mirror might need the links during save, or the spider when
         # the @stop rules pass. Or we might get away without parsing.
-        parser_class = get_parser_for_mimetype(get_content_type(response))
-        if parser_class:
-            response.parsed = parser_class(response.content, response.url,
-                                           encoding=response.encoding)
-        else:
-            response.parsed = None
-        response.links_parsed = HeaderLinkParser(response)
+        if not response_was_304:
+            parser_class = get_parser_for_mimetype(get_content_type(response))
+            if parser_class:
+                response.parsed = parser_class(response.content, response.url,
+                                               encoding=response.encoding)
+            else:
+                response.parsed = None
+            response.links_parsed = HeaderLinkParser(response)
 
         # Save the file locally?
         if self.mirror:
             if not response_was_304:
                 if self.rules.save(link, self):
                     self.mirror.add(link, response)
+                    self.events.save_state_changed(link, saved=True)
+                else:
+                    self.events.save_state_changed(link, saved=False)
             else:
                 # Mirror still needs to know we found this url so
                 # it won't be deleted during cleanup.
@@ -352,19 +432,23 @@ class Spider(object):
         # Run a hook that makes it possible to stop now and ignore
         # all the urls contained in this page.
         if self.rules.stop(link, self):
+            self.events.bail_state_changed(link, bail=True)
             return
 
         # Process follow up links.
         #
         # If we have a "304 not modified response", then the mirror
         # can tell us the urls that this page is pointing to.
+        num_links = 0
         if response_was_304:
             for link_url, info in self.mirror.url_info[link.url]['links']:
                 try:
-                    link = Link(link_url, previous=link, **info)
+                    new_link = Link(link_url, previous=link, **info)
                 except urlnorm.InvalidUrl:
                     continue
-                self._link_queue.appendleft(link)
+                self._link_queue.appendleft(new_link)
+                self.events.added_to_queue(new_link)
+                num_links += 1
 
         else:
             # Add links from the parsed content + the http headers
@@ -379,5 +463,9 @@ class Spider(object):
                     continue
                 new_link.set_previous(link)
                 self._link_queue.appendleft(new_link)
+                self.events.added_to_queue(new_link)
+                num_links += 1
+
+        self.events.bail_state_changed(link, bail=False, num_links=num_links)
 
 

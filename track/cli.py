@@ -9,7 +9,7 @@ import fnmatch
 from os.path import commonprefix, normpath, abspath, basename, splitext, join
 import argparse
 from track.mirror import Mirror
-from track.spider import Spider, Rules, get_content_type
+from track.spider import Spider, Rules, get_content_type, Events
 
 
 class Redirect(Exception):
@@ -688,6 +688,92 @@ class CLIMirror(Mirror):
         return Mirror.get_filename(self, link, response)
 
 
+import colorama
+colorama.init()
+
+class CLIEvents(Events):
+
+    def __init__(self):
+        self.links = {}
+
+    def added_to_queue(self, link):
+        self.links.setdefault(link, {
+            'follow': {},
+            'save': {},
+            'bail': {}
+        })
+
+    def taken_by_processor(self, link):
+        self.added_to_queue(link)
+
+        self._output_link(link)
+
+    def follow_state_changed(self, link, **kwargs):
+        self.added_to_queue(link)
+
+        self.links.setdefault(link, {})
+        self.links[link].setdefault('follow', {})
+        self.links[link]['follow'].update(kwargs)
+
+        self._output_link(link)
+
+    def bail_state_changed(self, link, **kwargs):
+        self.links.setdefault(link, {})
+        self.links[link].setdefault('bail', {})
+        self.links[link]['bail'].update(kwargs)
+
+    def completed(self, link):
+        self._output_link(link, True)
+
+    def _output_link(self, link, finalize=False):
+        state = self.links[link]['follow']
+
+        standard = ''
+        error = colorama.Fore.RED
+        success = colorama.Fore.GREEN
+        verbose = colorama.Fore.YELLOW
+        style = standard
+
+        # URL state/result identifier
+        result = None
+        if 'success' in state:
+            result = ' + '
+            style = success
+        elif 'skipped' in state:
+            if state['skipped'] == 'duplicate':
+                result = 'dup'
+                style = standard
+            if state['skipped'] == 'rule-deny':
+                result = ' - '
+                style = verbose
+        elif 'failed' in state:
+            if state['failed'] == 'redirect':
+                result = ' → '
+                style = success
+            if state['failed'] == 'http-error':
+                result = 'err'
+                style = error
+            if state['failed'] == 'not-modified':
+                result = '304'
+                style = success
+        if not result:
+            result = '   '
+            style = error
+
+        # Number of links found
+        num_links = self.links[link]['bail'].get('num_links', None)
+        if num_links is not None:
+            num_links = '\033[1m' + ' +{}'.format(num_links) + '\033[0m'
+        else:
+            num_links = ''
+
+        msg = '{style}{result}{reset} {url}{num_links}'.format(
+            style=style, reset=colorama.Style.RESET_ALL,
+            result=result, url=link.original_url, num_links=num_links)
+
+        import sys
+        sys.stdout.write(msg +  ('\n' if finalize else '\r'))
+
 
 class MyArgumentParser(argparse.ArgumentParser):
 
@@ -868,7 +954,7 @@ class Script:
 
         # Setup the spider
         try:
-            spider = Spider(CLIRules(namespace), mirror=mirror)
+            spider = Spider(CLIRules(namespace), mirror=mirror, events=CLIEvents())
         except RuleError as e:
             print('error: {1}: {0}'.format(*e.args))
             return
