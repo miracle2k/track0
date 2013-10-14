@@ -330,9 +330,11 @@ class Spider(object):
     def process_one(self):
         link = self._link_queue.pop()
         self.events.taken_by_processor(link)
-        not_yet_completed = self._process_link(link)
-        if not not_yet_completed:
-            self.events.completed(link)
+        add_again = self._process_link(link)
+        self.events.completed(link)
+        if add_again:
+            self._link_queue.appendleft(link)
+            self.events.added_to_queue(link)
 
     def _process_link(self, link):
         # Some links we are not supposed to follow, like <form action=>
@@ -367,9 +369,10 @@ class Spider(object):
             # This request failed at the connection stage
             if link.retries <= self.max_retries:
                 link = link.retry()
-                self._link_queue.appendleft(link)
-                self.events.added_to_queue(link)
-            return True
+                self.events.follow_state_changed(link, failed='connect-error')
+                return True
+
+            return False
 
         # If we have been redirected to a different url, add that
         # url to the queue again.

@@ -760,7 +760,7 @@ class CLIEvents(Events):
             if state['failed'] == 'redirect':
                 result = ' → '
                 style = success
-            if state['failed'] == 'http-error':
+            if state['failed'] in ('http-error', 'connect-error'):
                 result = 'err'
                 style = error
             if state['failed'] == 'not-modified':
