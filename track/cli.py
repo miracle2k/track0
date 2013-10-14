@@ -478,8 +478,8 @@ Operators = {
     '=': OperatorImpl.equality,
     '<': OperatorImpl.smaller,
     '>': OperatorImpl.larger,
-    '<=': OperatorImpl.larger_or_equal,
-    '>=': OperatorImpl.smaller_or_equal
+    '<=': OperatorImpl.smaller_or_equal,
+    '>=': OperatorImpl.larger_or_equal
 }
 
 
