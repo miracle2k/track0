@@ -1,3 +1,4 @@
+from collections import namedtuple
 from contextlib import closing
 import hashlib
 import inspect
@@ -495,6 +496,10 @@ class RuleError(Exception):
     pass
 
 
+Rule = namedtuple(
+    'Rule', ['action', 'is_stop_action', 'test', 'op', 'value', 'pretty'])
+
+
 class CLIRules(Rules):
     """Makes the spider follow the rules defined in the argparse
     namespace given.
@@ -546,7 +551,7 @@ class CLIRules(Rules):
         # The rest is the value
         value = ''.join(stack)
 
-        return (action, is_stop_action), test, op, value
+        return Rule(action, is_stop_action, test, op, value, rule)
 
     @classmethod
     def get_test(cls, name):
@@ -572,6 +577,7 @@ class CLIRules(Rules):
 
     def _apply_rules(self, rules, link, spider):
         result = self.rule_default
+        test_results = []
         ctx = {
             'spider': spider
         }
@@ -582,13 +588,15 @@ class CLIRules(Rules):
         # rules such that we can do the right thing *and* optimize.
         # TODO: Optimization is particularily important since some rules
         # cause a HEAD request, or worse, a full download.
-        for (action, is_stop_action), test, op, value in rules:
+        for rule in rules:
             try:
-                passes = self._run_test(test, op, value, link, ctx)
+                passes = self._run_test(
+                    rule.test, rule.op, rule.value, link, ctx)
                 if passes:
-                    result = action
-                    if is_stop_action:  # ++ or --
+                    result = rule.action
+                    if rule.is_stop_action:  # ++ or --
                         break
+                test_results.append((passes, rule))
             except Redirect:
                 # If the test can't provide value to to the redirect,
                 # evaluate the whole thing to "allow". We don't want
@@ -600,16 +608,23 @@ class CLIRules(Rules):
                 #   +size>1m -domain=foo.*
                 #   --size<3m +
                 result = True
-        return result
+                test_results.append((True, rule))
+        return result, test_results
 
     def follow(self, link, spider):
-        return self._apply_rules(self.follow_rules, link, spider)
+        result, tests = self._apply_rules(self.follow_rules, link, spider)
+        spider.events.follow_state_changed(link, tests=tests)
+        return result
 
     def save(self, link, spider):
-        return self._apply_rules(self.save_rules, link, spider)
+        result, tests = self._apply_rules(self.save_rules, link, spider)
+        spider.events.save_state_changed(link, tests=tests)
+        return result
 
     def stop(self, link, spider):
-        return self._apply_rules(self.stop_rules, link, spider)
+        result, tests = self._apply_rules(self.stop_rules, link, spider)
+        spider.events.bail_state_changed(link, tests=tests)
+        return result
 
     def configure_session(self, session):
         user_agent = UserAgents.get(
@@ -705,22 +720,17 @@ class CLIEvents(Events):
 
     def taken_by_processor(self, link):
         self.added_to_queue(link)
-
         self._output_link(link)
 
     def follow_state_changed(self, link, **kwargs):
         self.added_to_queue(link)
-
-        self.links.setdefault(link, {})
-        self.links[link].setdefault('follow', {})
         self.links[link]['follow'].update(kwargs)
-
         self._output_link(link)
 
     def bail_state_changed(self, link, **kwargs):
-        self.links.setdefault(link, {})
-        self.links[link].setdefault('bail', {})
+        self.added_to_queue(link)
         self.links[link]['bail'].update(kwargs)
+        self._output_link(link)
 
     def completed(self, link):
         self._output_link(link, True)
@@ -767,9 +777,18 @@ class CLIEvents(Events):
         else:
             num_links = ''
 
-        msg = '{style}{result}{reset} {url}{num_links}'.format(
+        # The last test that passed
+        last_test = ''
+        passed_tests = [test for passed, test in state.get('tests', []) if passed]
+        if passed_tests:
+            last_test = passed_tests[-1]
+            last_test = ' '+(success if last_test.action else error)+ \
+                        last_test.pretty + colorama.Style.RESET_ALL
+
+        msg = '{style}{result}{reset} {url}{num_links}{last_test}'.format(
             style=style, reset=colorama.Style.RESET_ALL,
-            result=result, url=link.original_url, num_links=num_links)
+            result=result, url=link.original_url, num_links=num_links,
+            last_test=last_test)
 
         import sys
         sys.stdout.write(msg +  ('\n' if finalize else '\r'))
