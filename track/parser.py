@@ -298,6 +298,7 @@ class HTMLTokenizer(Parser):
 
                         # Parse attribute value
                         if p.next_if('='):
+                            p.skip_whitespace()
                             yield p.switch_element()
                             # http://dev.w3.org/html5/spec-LC/tokenization.html#before-attribute-value-state
                             if cur() in '\'"':

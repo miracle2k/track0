@@ -119,8 +119,17 @@ class TestHTMLParser(object):
         assert self.replace(doc, lambda u: 'bar.gif') == \
             b"""<style>h1 { background-image: url("bar.gif") }</style>"""
 
+    # HTML Tokenization issues
+
     def test_unclosed_style_tag(self):
         """[regression]"""
         doc = b"""<style>h1 { background-image: url('foo.png') }"""
         urls, opts = self.urls_with_opts(doc)
         assert urls[0] == 'http://example.org/foo.png'
+
+    def test_linebreak_before_attr_value(self):
+        """[regression]"""
+        doc = b"""<a href=
+        "foo">"""
+        urls, opts = self.urls_with_opts(doc)
+        assert urls[0] == 'http://example.org/foo'
