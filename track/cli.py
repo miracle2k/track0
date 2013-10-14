@@ -793,6 +793,9 @@ class CLIEvents(Events):
         import sys
         sys.stdout.write(msg +  ('\n' if finalize else '\r'))
 
+    def finalize(self):
+        sys.stdout.write('\n')
+
 
 class MyArgumentParser(argparse.ArgumentParser):
 
@@ -1001,7 +1004,13 @@ class Script:
             mirror.info['cli-argv'] = argv[1:]
 
         # Go
-        spider.loop()
+        try:
+            spider.loop()
+        except:
+            # Be sure the console cursor is set such that
+            # nothing will be overwritten
+            spider.events.finalize()
+            raise
 
         # If so desired, we can delete files from the mirror that no
         # longer exist online.
