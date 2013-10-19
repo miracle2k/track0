@@ -753,6 +753,7 @@ class CLIEvents(Events):
             if state['skipped'] == 'duplicate':
                 result = 'dup'
                 style = standard
+                return
             if state['skipped'] == 'rule-deny':
                 result = ' - '
                 style = verbose
