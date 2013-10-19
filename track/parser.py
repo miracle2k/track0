@@ -73,7 +73,7 @@ class Parser(object):
     def as_text(self, data):
         if isinstance(data, str):
             return data
-        return data.decode(self.encoding or 'utf-8')
+        return data.decode(self.encoding or 'utf-8', 'replace')
 
     def same_as_input(self, data):
         if isinstance(self.data, bytes):
