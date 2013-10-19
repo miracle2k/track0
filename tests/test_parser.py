@@ -160,3 +160,17 @@ class TestHTMLParser(object):
         "foo">"""
         urls, opts = self.urls_with_opts(doc)
         assert urls[0] == 'http://example.org/foo'
+
+    def test_opening_tag_not_closed(self):
+        """[regression]"""
+        doc = """<b<Das schön</b>Der eher"""
+        tokens = self.parse(doc)
+        assert tokens[0]['type'] == 'tag-open'
+        assert tokens[0]['name'] == 'b<Das'
+        assert tokens[1]['type'] == 'attr-begin'
+        assert tokens[1]['name'] == 'schön<'
+        assert tokens[2]['type'] == 'attr-begin'
+        assert tokens[2]['name'] == 'b'
+        assert tokens[3]['type'] == 'tag-open-end'
+        assert len(tokens) == 4
+

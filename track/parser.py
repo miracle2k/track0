@@ -286,13 +286,15 @@ class HTMLTokenizer(Parser):
                     while True:
                         # http://dev.w3.org/html5/spec-LC/tokenization.html#before-attribute-name-state
                         p.skip_whitespace()
-                        if not cur() or cur() in '/>':
-                            p.skip_while('/>')
+                        if not cur() or match('/>') or match('>'):
                             break
 
                         # http://dev.w3.org/html5/spec-LC/tokenization.html#attribute-name-state
                         yield p.switch_element()
                         attr_name = p.skip_until('\t\r\n />=')
+                        if not attr_name:
+                            next()
+                            continue
                         yield p.switch_element(
                             type='attr-begin', name=attr_name, tag_name=tag_name)
 
@@ -330,11 +332,16 @@ class HTMLTokenizer(Parser):
                             if not attr_name in tag_attrs:
                                 tag_attrs[attr_name] = attr_value_token
 
+
                     # For convenience, yield a token with all the attributes
                     yield p.switch_element(
                         type='tag-open-end', name=tag_name, attrs=tag_attrs)
 
-                    # Done processing the opening tag.
+                    # Done processing the opening tag. This assert helped
+                    # as find a number of bugs already.
+                    #print(p.data[p.pos-100:p.pos])
+                    assert peek(-1) == '>' or cur() is None
+
                     # We now need to implement some special processing of
                     # tag contents that we care about: <style> and <script>.
                     #
@@ -346,8 +353,6 @@ class HTMLTokenizer(Parser):
                     #
                     # http://dev.w3.org/html5/spec-LC/tokenization.html#rawtext-state
                     # http://www.w3.org/TR/html5/syntax.html#parsing-main-inhead
-                    assert peek(-1) == '>' or cur() is None
-
                     if tag_name in ('style', 'script'):
                         yield p.switch_element()
                         last_pos_before_match = p.pos
