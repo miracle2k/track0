@@ -150,7 +150,6 @@ class Link(object):
         self.info = info
 
         # Runtime data
-        self.session = None
         self.response = None
         self.exception = None
         self.retries = 0
@@ -191,13 +190,8 @@ class Link(object):
             self._parsed = urlparse(self.original_url)
         return self._parsed
 
-    def resolve(self, type, etag=None, last_modified=None):
+    def resolve(self, spider, type, etag=None, last_modified=None):
         """This actually executes a request for this URL.
-
-        A ``session`` attribute with a ``requests`` session needs to
-        be set for this to work. This session needs to be adorned
-        with a ``configure_request()`` method, which would usually
-        go to the :meth:`Rules.configure_request` hook.
 
         ``type`` specifies whether a HEAD request suffices, or if you
         need a full request. The trick is that this will cache the
@@ -208,9 +202,6 @@ class Link(object):
         unnecessary network traffic.
         """
         assert type in ('head', 'full')
-        if not hasattr(self, 'session'):
-            raise TypeError(
-                'This Link instance has no session, cannot resolve().')
 
         # TODO: Consider just raising the error all the way through
         # the rule handling.
@@ -234,10 +225,10 @@ class Link(object):
                 request.headers['if-none-match'] = etag
             if last_modified:
                 request.headers['if-modified-since'] = last_modified
-            self.session.configure_request(request, self)
+            spider.rules.configure_request(request, self)
 
             request = request.prepare()
-            response = self.session.send(
+            response = spider.session.send(
                 request,
                 # If the url is not saved and not a document, we don't
                 # need to access the content. The question is:
@@ -248,7 +239,7 @@ class Link(object):
                 # Handle redirects manually
                 allow_redirects=False)
 
-            redirects = self.session.resolve_redirects(
+            redirects = spider.session.resolve_redirects(
                 response, request,
                 # Important: We do NOT fetch the body of the final url
                 # (and hopefully `resolve_redirects` wouldn't waste any
@@ -310,7 +301,6 @@ class Spider(object):
         if not hasattr(self, '_session'):
             self._session = self.session_class()
             self.rules.configure_session(self._session)
-            self._session.configure_request = self.rules.configure_request
         return self._session
 
     def add(self, url, **kwargs):
@@ -347,9 +337,6 @@ class Spider(object):
             self.events.follow_state_changed(link, skipped='duplicate')
             return
 
-        # Attach a session to the url so it can resolve itself
-        link.session = self.session
-
         # Test whether this is a link that we should even follow
         if link.source != 'user' and not self.rules.follow(link, self):
             self.events.follow_state_changed(link, skipped='rule-deny')
@@ -364,7 +351,7 @@ class Spider(object):
             modified = self.mirror.url_info[link.url].get('last-modified') or False
 
         # Go ahead with the request
-        response = link.resolve('full', etag=etag, last_modified=modified)
+        response = link.resolve(self, 'full', etag=etag, last_modified=modified)
         if response is False:
             # This request failed at the connection stage
             if link.retries <= self.max_retries:

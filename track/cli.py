@@ -302,7 +302,7 @@ class TestImpl(object):
         return link.parsed.fragment
 
     @staticmethod
-    def size(link):
+    def size(link, ctx):
         """Test the size of the document behind a url.
 
         You may use K, M or G as units::
@@ -313,7 +313,7 @@ class TestImpl(object):
         the size. If the HEAD request does not include information about
         the size, the full url needs to be fetched.
         """
-        response = link.resolve('head')
+        response = link.resolve(ctx['spider'], 'head')
         if not response:
             return None
         if response.redirects:
@@ -331,7 +331,7 @@ class TestImpl(object):
 
 
     @staticmethod
-    def content_type(link):
+    def content_type(link, ctx):
         """Match against the content type of the url.
 
         A content type might be ``text/html`` or ``image/png``.
@@ -339,18 +339,18 @@ class TestImpl(object):
         Note: This will execute a HEAD request to the url to determine
         the content type.
         """
-        response = link.resolve('head')
+        response = link.resolve(ctx['spider'], 'head')
         if not response:
             return None
         return get_content_type(response)
 
     @staticmethod
-    def content(link):
+    def content(link, ctx):
         """Match against the content of the url.
 
         Careful! This test requires a url to be downloaded in full .
         """
-        response = link.resolve('full')
+        response = link.resolve(ctx['spider'], 'full')
         if not response:
             return None
         return response.text
