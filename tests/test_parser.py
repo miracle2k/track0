@@ -1,3 +1,4 @@
+# coding: utf-8
 from track.parser import CSSParser, HTMLParser
 
 
@@ -27,16 +28,29 @@ class TestCSSParser(object):
 
 class TestHTMLParser(object):
 
+    def _make_parser(self, html, url='http://example.org'):
+        parser = HTMLParser(html, url)
+        # Always make sure the file can be correctly put together again
+        assert parser.replace_urls(lambda s: None) == html
+        return parser
+
+    def parse(self, html, only_type=None, ignore=['unknown']):
+        if not isinstance(only_type, (list, tuple)):
+            only_type = [only_type]
+        return [token
+                for token in self._make_parser(html)._parse()
+                if (only_type is not None and token['type'] in only_type)
+                   or not token['type'] in ignore]
+
     def urls(self, html):
-        return [url for url, opts in HTMLParser(html, 'http://example.org')]
+        return [url for url, opts in self._make_parser(html)]
 
     def urls_with_opts(self, html):
-        parser = HTMLParser(html, 'http://example.org')
+        parser = self._make_parser(html)
         return [r[0] for r in parser], [r[1] for r in parser]
 
     def replace(self, html, replacer):
-        parser = HTMLParser(html, 'http://example.org')
-        return parser.replace_urls(replacer)
+        return self._make_parser(html).replace_urls(replacer)
 
     def test_entities(self):
         urls, opts = self.urls_with_opts(b"""
