@@ -222,7 +222,7 @@ class HTMLTokenizer(Parser):
     def __init__(self, data, url, encoding=None):
         # If no transport-level encoding as specified, try to find one
         # within the HTML, or fall back to utf-8 as default.
-        if not encoding:
+        if isinstance(data, bytes) and not encoding:
             encoding = self._detect_encoding(data) or 'utf-8'
         Parser.__init__(self, data, url, encoding)
 
