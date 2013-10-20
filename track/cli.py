@@ -53,6 +53,12 @@ class TestImpl(object):
         return True
 
     @staticmethod
+    def robots(link, ctx):
+        """Passes if the url is disallowed by robots instructions.
+        """
+        return not ctx['spider'].robots.allowed(link.url)
+
+    @staticmethod
     def depth(link):
         """Tests the depth of the link within the discovery process. A
         starting link has a depth of 0, a link found within that
@@ -402,6 +408,7 @@ AvailableTests = {
     # Operating on the url/discovery source
     'tag': TestImpl,
     'requisite': TestImpl,
+    'robots': TestImpl,
 }
 
 
@@ -637,12 +644,15 @@ class CLIRules(DefaultRules):
             return self.expiration_check(link, spider)
 
     def configure_session(self, session):
+        super().configure_session(session)
+
+        # Overwrite our default user agent with the user's choice
         user_agent = UserAgents.get(
-            self.arguments.user_agent, self.arguments.user_agent) or \
-                     'Track/alpha'
-        session.headers.update({
-            'User-Agent': user_agent,
-        })
+            self.arguments.user_agent, self.arguments.user_agent)
+        if user_agent:
+            session.headers.update({
+                'User-Agent': user_agent,
+            })
 
 
 class URLFormatter(string.Formatter):

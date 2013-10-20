@@ -27,7 +27,8 @@ setup(
     install_requires=[
         'requests',
         'urlnorm==custom,>=1.1.2',
-        'charade'
+        'charade',
+        'reppy>=0.2.2'
     ],
     test_requires=[
         'pytest',

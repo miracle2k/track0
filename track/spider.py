@@ -2,6 +2,7 @@ from collections import deque
 import datetime
 import email
 from itertools import chain
+import reppy.cache
 import requests
 from urllib.parse import urlparse, urldefrag
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
@@ -256,6 +257,14 @@ def parse_http_date_header(datestr):
     return datetime.datetime(*parsed[:6])
 
 
+class RobotsCache(reppy.cache.RobotsCache):
+
+    def allowed(self, url):
+        # Automatically use our user-agent.
+        super().allowed(
+            url, self.session.headers['user-agent'])
+
+
 class Rules(object):
     """Defines the logic of the spider: when to follow a link,
     when to save a file locally etc.
@@ -312,6 +321,11 @@ class DefaultRules(Rules):
     def skip_download(self, link, spider):
         return self.expiration_check(link.url, spider)
 
+    def configure_session(self, session):
+        session.headers.update({
+            'User-Agent': 'Track/alpha',
+        })
+
     def configure_request(self, request, link, spider):
         etag = last_modified = False
         if link.url in spider.mirror.url_info:
@@ -346,6 +360,15 @@ class Spider(object):
             self._session = self.session_class()
             self.rules.configure_session(self._session)
         return self._session
+
+    @property
+    def robots(self):
+        """Exposes an object that allows querying the robots.txt
+        file for a url. Will auto-fetch robots files and cache them.
+        """
+        if not hasattr(self, '_robots'):
+            self._robots = RobotsCache(session=self.session)
+        return self._robots
 
     def add(self, url, **kwargs):
         """Add a new Link to be processed.
