@@ -161,7 +161,7 @@ class Link(object):
             self._parsed = urlparse(self.original_url)
         return self._parsed
 
-    def resolve(self, spider, type, etag=None, last_modified=None):
+    def resolve(self, spider, type):
         """This actually executes a request for this URL.
 
         ``type`` specifies whether a HEAD request suffices, or if you
@@ -414,6 +414,7 @@ class Spider(object):
                 if link.exception:
                     if link.retries <= self.max_retries:
                         link = link.retry()
+                        # TODO: Log specific reason more clearly...
                         self.events.follow_state_changed(link, failed='connect-error')
                         return True
                     return False
