@@ -4,7 +4,7 @@ import email
 from itertools import chain
 import requests
 from urllib.parse import urlparse, urldefrag
-from requests.exceptions import InvalidSchema, MissingSchema, ConnectionError, Timeout
+from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 import urlnorm
 from track.parser import get_parser_for_mimetype, HeaderLinkParser
 
@@ -220,8 +220,7 @@ class Link(object):
             response.redirects = list(redirects)
 
             self.response = response
-        except (InvalidSchema, MissingSchema):
-            # Urls like xri://, mailto: and the like.
+        except (TooManyRedirects):
             self.response = False
             self.exception = None
         except (ConnectionError, Timeout) as e:
@@ -412,12 +411,15 @@ class Spider(object):
             response = link.resolve(self, 'full')
             if response is False:
                 # This request failed at the connection stage
-                if link.retries <= self.max_retries:
-                    link = link.retry()
-                    self.events.follow_state_changed(link, failed='connect-error')
-                    return True
-
-                return False
+                if link.exception:
+                    if link.retries <= self.max_retries:
+                        link = link.retry()
+                        self.events.follow_state_changed(link, failed='connect-error')
+                        return True
+                    return False
+                else:
+                    self.events.follow_state_changed(link, failed='redirect-error')
+                    return False
 
             # If we have been redirected to a different url, add that
             # url to the queue again.
