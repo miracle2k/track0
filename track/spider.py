@@ -251,6 +251,9 @@ def parse_http_date_header(datestr):
         return None
     # http://stackoverflow.com/a/1472336/15677
     parsed = email.utils.parsedate(datestr)
+    if not parsed:
+        # TODO: Log this in very verbose mode
+        return None
     return datetime.datetime(*parsed[:6])
 
 
