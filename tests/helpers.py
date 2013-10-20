@@ -4,7 +4,7 @@ from io import BytesIO, TextIOWrapper
 import pytest
 import requests.adapters
 from requests_testadapter import TestSession, Resp
-from track.spider import Spider as BaseSpider, Rules as BaseRules
+from track.spider import Spider as BaseSpider, Rules as BaseRules, Link
 from track.mirror import Mirror as BaseMirror
 
 
@@ -164,7 +164,7 @@ def internet(**urls):
         # Support shortcut urls
         if not ':' in url:
             url = 'http://example.org/%s' % url
-        return url
+        return Link(url).url   # normalized url
 
     old_urls = TestAdapter.urls
     old_requests = TestAdapter.requests

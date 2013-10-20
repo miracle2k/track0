@@ -54,6 +54,89 @@ class TestNormalizeUrl:
             assert b'"./foo.htm#some-fragment"' in content
 
 
+class TestDuplicateHandling:
+    """This is a bit more tricky than you might think because while
+    we want to minimize any duplicate processing, we might have to
+    account for rules like "@save +depth-3 -tag=a" which mean that
+    the same url might be skipped 100 times only to match the 101 time.
+    """
+
+    def test_filtered_before_queue(self, spider):
+        """Test that duplicates are not even added to the queue
+        to begin with."""
+        urlspec = {'http://example.org': '<a href="http://example.org"><a>'}
+        with internet(**urlspec) as uris:
+            spider.add(uris[0])
+            spider.process_one()
+
+            # No link was added to the queue
+            assert len(spider) == 0
+
+    def test_only_saved_urls_can_be_duplicates(self, spider):
+        """The same url can be queued multiple times until it
+        is downloaded at least once. This is because whether
+        a link is to be saved may depend on where it is found.
+        """
+        urlspec = {'http://example.org': '<a href="/link"><a>',
+                   'http://example.org/link': ''}
+        with internet(**urlspec) as uris:
+            # Run through spider once, do not save /link
+            spider.rules._save = lambda l: False
+            spider.add(uris[0])
+            spider.loop()
+
+            # Try again with a different rule
+            spider.rules._save = lambda l: True
+            spider.add(uris[0])
+            spider.process_one()
+
+            # The link was added to the queue
+            assert len(spider) == 1
+
+    def test_duplicates_can_be_added_to_the_queue(self, spider):
+        """Slightly different version of
+        "test_only_saved_urls_can_be_duplicates".
+
+        The same url will be added to the queue multiple times until
+        it has been processed once.
+        """
+        urlspec = {'http://example.org/1': '<a href="/link"><a>',
+                   'http://example.org/2': '<a href="/link"><a>',
+                   'http://example.org/link': ''}
+        with internet(**urlspec) as uris:
+            # Process multiple pages linking to the same url
+            spider.add('http://example.org/1')
+            spider.add('http://example.org/2')
+            spider.process_one()
+            spider.process_one()
+
+            # That url is now on the queue twice
+            assert len(spider) == 2
+            assert spider._link_queue[0].url == 'http://example.org/link'
+            assert spider._link_queue[1].url == 'http://example.org/link'
+
+    def test_duplicates_in_user_api(self, spider):
+        """Duplicates and the public spider.add() method.
+        """
+        urlspec = {'http://example.org': '<a href="http://example.org"><a>'}
+        with internet(**urlspec) as net:
+            # Duplicates are allowed on the queue
+            spider.add(net[0])
+            spider.add(net[0])
+            assert len(spider) == 2
+
+            # But they are not processed twice
+            spider.loop()
+            assert len(list(net.requests.elements())) == 1
+
+        with internet(**urlspec) as net:
+            # Previously processed url can be added again, but is not processed.
+            spider.add(net[0])
+            assert len(spider) == 1
+            spider.loop()
+            assert len(list(net.requests.elements())) == 0
+
+
 def test_error_code(spider):
     """Error pages are ignored; they are never saved nor followed.
     """

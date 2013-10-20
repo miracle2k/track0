@@ -782,9 +782,10 @@ class CLIEvents(Events):
             style = error
 
         # Number of links found
-        num_links = self.links[link]['bail'].get('num_links', None)
+        num_links = self.links[link]['bail'].get('links_followed', None)
+        total_links = self.links[link]['bail'].get('links_total', None)
         if num_links is not None:
-            num_links = '\033[1m' + ' +{}'.format(num_links) + '\033[0m'
+            num_links = '\033[1m' + ' +{}\033[0m/{}'.format(num_links, total_links)
         else:
             num_links = ''
 

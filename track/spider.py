@@ -330,7 +330,7 @@ class Spider(object):
 
     def __init__(self, rules, mirror=None, events=None):
         self._link_queue = deque()
-        self._known_urls = []
+        self._known_urls = set()
         self.rules = rules
         self.mirror = mirror
         self.events = events or Events()
@@ -352,6 +352,22 @@ class Spider(object):
         opts.update(kwargs)
         link = Link(url, **opts)
         self._link_queue.appendleft(link)
+
+    def _add(self, url, **opts):
+        """Internal add-to-queue which refuses duplicates.
+        """
+        try:
+            link = Link(url, **opts)
+        except urlnorm.InvalidUrl:
+            return
+
+        # Check the normalized version of the url against the database
+        if link.url in self._known_urls:
+            return False
+
+        self._link_queue.appendleft(link)
+        self.events.added_to_queue(link)
+        return True
 
     def loop(self):
         while len(self._link_queue):
@@ -448,6 +464,7 @@ class Spider(object):
             response.links_parsed = HeaderLinkParser(response)
 
         # Save the file locally?
+        add_to_known_list = True
         if self.mirror:
             if not skip_download and not response_was_304:
                 if self.rules.save(link, self):
@@ -455,13 +472,22 @@ class Spider(object):
                     self.events.save_state_changed(link, saved=True)
                 else:
                     self.events.save_state_changed(link, saved=False)
+                    # TODO: This means that if a save rule is used, we will
+                    # re-download duplicate urls during the follow phase.
+                    # Maybe the duplicate check should happen at the
+                    # follow level. But then a rule like @save depth=3 would
+                    # not be reliable.
+                    # Possible solution: move the save test up, before we
+                    # do our regular fetch. We can then
+                    add_to_known_list = False
             else:
                 # Mirror still needs to know we found this url so
                 # it won't be deleted during cleanup.
                 self.mirror.encounter_url(link)
 
         # No need to process this url again
-        self._known_urls.append(link.url)
+        if add_to_known_list:
+            self._known_urls.add(link.url)
 
         # Run a hook that makes it possible to stop now and ignore
         # all the urls contained in this page.
@@ -473,33 +499,26 @@ class Spider(object):
         #
         # If we didn't properly download a full response, then the mirror
         # can tell us the urls that this page is pointing to.
-        num_links = 0
+        num_links_followed = num_links_total = 0
         if skip_download or response_was_304:
             for link_url, info in self.mirror.url_info[link.url]['links']:
-                try:
-                    new_link = Link(link_url, previous=link, **info)
-                except urlnorm.InvalidUrl:
-                    continue
-                self._link_queue.appendleft(new_link)
-                self.events.added_to_queue(new_link)
-                num_links += 1
+                num_links_total += 1
+                if self._add(link_url, previous=link, **info):
+                    num_links_followed += 1
 
         else:
             # Add links from the parsed content + the http headers
-            for url, opts in chain(
+            for link_url, opts in chain(
                     response.links_parsed,
                     response.parsed or ()):
                 # Put together a url object with all the info that
                 # we have ad that tests can use.
-                try:
-                    new_link = Link(url, **opts)
-                except urlnorm.InvalidUrl:
-                    continue
-                new_link.set_previous(link)
-                self._link_queue.appendleft(new_link)
-                self.events.added_to_queue(new_link)
-                num_links += 1
+                num_links_total += 1
+                if self._add(link_url, previous=link, **opts):
+                    num_links_followed += 1
 
-        self.events.bail_state_changed(link, bail=False, num_links=num_links)
+        self.events.bail_state_changed(
+            link, bail=False,
+            links_followed=num_links_followed, links_total=num_links_total)
 
 
