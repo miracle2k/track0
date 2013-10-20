@@ -249,7 +249,6 @@ class HTMLTokenizer(Parser):
         next = p.next
 
         while cur():
-            # TODO: character refs, IE comments
             # Loosely following the tokenization spec:
             #   http://dev.w3.org/html5/spec-LC/tokenization.html#data-state
 
