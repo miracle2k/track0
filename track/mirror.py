@@ -124,7 +124,7 @@ from urllib.parse import urlparse
 import itertools
 import urlnorm
 from track.parser import get_parser_for_mimetype
-from track.spider import get_content_type, Link
+from track.spider import get_content_type, Link, parse_http_date_header
 
 
 def safe_filename(filename):
@@ -263,6 +263,7 @@ class Mirror(object):
             'etag': response.headers.get('etag'),
             'encoding': response.encoding,
             'last-modified': response.headers.get('last-modified'),
+            'expires': parse_http_date_header(response.headers.get('expires')),
             'links': []
         }
         for url, info in itertools.chain(

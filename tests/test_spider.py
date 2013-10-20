@@ -193,3 +193,50 @@ class TestRedirects:
 
 
 
+class TestSkipDownload:
+    """Test the Rules.skip_download API."""
+
+    def test_manual_skip_rule(self, spiderfactory):
+        """A custom rules implementation allows skipping downloads.
+        """
+        spider = spiderfactory()
+        spider.rules.skip_download = lambda link, spider: True
+        with internet() as net:
+            # Currently download skipping raises an error if the
+            # mirror does not know the url yet. While this makes
+            # sense for the intended purpose of skip_download(),
+            # possibly this should not be required from an API
+            # design standpoint. Certainly, making this test work is ugly.
+            spider.mirror.stored_urls['http://example.org/'] = ['']
+            spider.mirror.url_info['http://example.org/'] = {'links': [], 'mimetype': False}
+
+            spider.add('http://example.org/')
+            spider.loop()
+
+            # No requests have been executed
+            assert net.requests == {}
+
+            # But the url has been registered as seen
+            assert 'http://example.org/' in spider.mirror.encountered_urls
+
+
+    def test_expires(self, spider):
+        """:class:`DefaultRules` implements an expires check.
+        """
+        urlspec = {
+            'http://example.org/foo': dict(
+                    headers={'Expires': 'Sun, 12 Oct 2914 01:51:19 GMT'}),
+        }
+        with internet(**urlspec) as net:
+            # The first time, the expires header will be stored
+            spider.add(net[0])
+            spider.loop()
+
+            assert net.requests[net[0]] == 1
+
+        with internet(**urlspec) as net:
+            # The next time, we simply do not download the file
+            spider.add(net[0])
+            spider.loop()
+
+            assert net.requests[net[0]] == 0

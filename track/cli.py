@@ -10,7 +10,7 @@ import fnmatch
 from os.path import commonprefix, normpath, abspath, basename, splitext, join
 import argparse
 from track.mirror import Mirror
-from track.spider import Spider, Rules, get_content_type, Events
+from track.spider import Spider, DefaultRules, get_content_type, Events
 
 
 class Redirect(Exception):
@@ -500,7 +500,7 @@ Rule = namedtuple(
     'Rule', ['action', 'is_stop_action', 'test', 'op', 'value', 'pretty'])
 
 
-class CLIRules(Rules):
+class CLIRules(DefaultRules):
     """Makes the spider follow the rules defined in the argparse
     namespace given.
     """
@@ -625,6 +625,16 @@ class CLIRules(Rules):
         result, tests = self._apply_rules(self.stop_rules, link, spider)
         spider.events.bail_state_changed(link, tests=tests)
         return result
+
+    def skip_download(self, link, spider):
+        if not link.url in spider.mirror.url_info:
+            return False
+
+        if self.arguments.no_modified_check:
+            return 'exists'
+
+        if self.arguments.trust_expires:
+            return self.expiration_check(link, spider)
 
     def configure_session(self, session):
         user_agent = UserAgents.get(
@@ -862,16 +872,9 @@ class Script:
             '-O', '--path',
             help='output directory for the mirror')
         parser.add_argument(
-            '-U', '--update', action='store_true',
-            help="use the command line options previously used when an"
-                 "existing mirror was created")
-        parser.add_argument(
             '--layout',
             help='a custom layout for organizing the files in the target '
                  'directory; use tests as variables, e.g. {domain}')
-        parser.add_argument(
-            '--enable-delete', action='store_true',
-            help='delete existing local files no encountered by the spider')
         parser.add_argument(
             '--no-link-conversion', action='store_true',
             help='do not modify urls in the local copy in any way')
@@ -882,6 +885,23 @@ class Script:
         parser.add_argument(
             '--no-live-update', action='store_true',
             help='delay local mirror modifications until the spider is done')
+
+        # How to deal with existing files.
+        parser.add_argument(
+            '-U', '--update', action='store_true',
+            help="use the command line options previously used when an"
+                 "existing mirror was created")
+        parser.add_argument(
+            '--enable-delete', action='store_true',
+            help='delete existing local files no encountered by the spider')
+        parser.add_argument(
+            '--no-modified-check', action='store_true',
+            help='do not check if an existing file has been modified on the '
+                 'server')
+        parser.add_argument(
+            '--trust-expires', action='store_true',
+            help='skip checking files for updates if the expires header allows')
+
         # Affecting the start urls
         parser.add_argument(
             '-F', '--from-file', action='append', metavar='FILE',
@@ -889,6 +909,7 @@ class Script:
         parser.add_argument(
             'url', nargs='*', metavar='url',
             help='urls to be added to the queue initially as a starting point')
+
         # Affecting the parsing process
         parser.add_argument(
             '--user-agent',

@@ -1,5 +1,6 @@
+from collections import Counter
 from contextlib import contextmanager
-from io import StringIO, BytesIO, TextIOWrapper
+from io import BytesIO, TextIOWrapper
 import pytest
 import requests.adapters
 from requests_testadapter import TestSession, Resp
@@ -7,7 +8,23 @@ from track.spider import Spider as BaseSpider, Rules as BaseRules
 from track.mirror import Mirror as BaseMirror
 
 
-class TestAdapter(requests.adapters.HTTPAdapter):
+class Internet(type):
+    """Metaclass for the TestAdapter that lets test interact the fake
+    internet."""
+
+    def __new__(cls, *args, **kwargs):
+        cls.urls = {}
+        cls.requests = Counter()
+        return type.__new__(cls, *args, **kwargs)
+
+    def __iter__(self):
+        yield from sorted(self.urls.keys())
+
+    def __getitem__(self, item):
+        return list(self)[item]
+
+
+class TestAdapter(requests.adapters.HTTPAdapter, metaclass=Internet):
     """The TestAdapter that comes with the ``requests_testadapter``
     module isn't right for our purposes. Maybe we can get rid of the
     module all together.
@@ -18,10 +35,9 @@ class TestAdapter(requests.adapters.HTTPAdapter):
     session).
     """
 
-    urls = {}
-
     def send(self, request, stream=False, timeout=None,
              verify=True, cert=None, proxies=None):
+        self.requests.update({request.url: 1})
         if not request.url in self.urls:
             raise ConnectionError('no such virtual url', request.url)
         resp = Resp(**self.urls[request.url])
@@ -151,6 +167,7 @@ def internet(**urls):
         return url
 
     old_urls = TestAdapter.urls
+    old_requests = TestAdapter.requests
     try:
         final_urls = {}
         for url, data in urls.items():
@@ -192,9 +209,11 @@ def internet(**urls):
             final_urls[make_url(url)] = data
 
         TestAdapter.urls = final_urls
-        yield list(sorted(final_urls.keys()))
+        TestAdapter.requests = Counter()
+        yield TestAdapter
     finally:
         TestAdapter.urls = old_urls
+        TestAdapter.requests = old_requests
 
 
 class arglogger:

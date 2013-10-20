@@ -1,4 +1,6 @@
 from collections import deque
+import datetime
+import email
 from itertools import chain
 import requests
 from urllib.parse import urlparse, urldefrag
@@ -75,37 +77,6 @@ class Events(object):
         you of the number of links found::
 
             {'num_links': 100}
-        """
-
-
-class Rules(object):
-    """Defines the logic of the spider: when to follow a link,
-    when to save a file locally etc.
-    """
-
-    def follow(self, link, spider):
-        """Return ``True`` if the spider should follow this link.
-        """
-        raise NotImplementedError()
-
-    def save(self, link, spider):
-        """Return ``True`` if the link should be saved locally.
-        """
-        raise NotImplementedError()
-
-    def stop(self, page, spider):
-        """Return ``False`` if the links of a page should not be followed.
-
-        The difference to :meth:`follow` is that this runs after
-        :meth:`save`.
-        """
-
-    def configure_session(self, session):
-        """Allows configuring the general environment.
-        """
-
-    def configure_request(self, request, link):
-        """Allows configuring the request for each link.
         """
 
 
@@ -221,11 +192,7 @@ class Link(object):
         try:
             method = 'GET' if type == 'full' else 'HEAD'
             request = requests.Request(method, self.url)
-            if etag:
-                request.headers['if-none-match'] = etag
-            if last_modified:
-                request.headers['if-modified-since'] = last_modified
-            spider.rules.configure_request(request, self)
+            spider.rules.configure_request(request, self, spider)
 
             request = request.prepare()
             response = spider.session.send(
@@ -277,6 +244,81 @@ def get_content_type(response):
     """Helper that strips out things like ";encoding=utf-8".
     """
     return response.headers.get('content-type', '').split(';', 1)[0]
+
+
+def parse_http_date_header(datestr):
+    if not datestr:
+        return None
+    # http://stackoverflow.com/a/1472336/15677
+    parsed = email.utils.parsedate(datestr)
+    return datetime.datetime(*parsed[:6])
+
+
+class Rules(object):
+    """Defines the logic of the spider: when to follow a link,
+    when to save a file locally etc.
+    """
+
+    def follow(self, link, spider):
+        """Return ``True`` if the spider should follow this link.
+        """
+        raise NotImplementedError()
+
+    def save(self, link, spider):
+        """Return ``True`` if the link should be saved locally.
+        """
+        raise NotImplementedError()
+
+    def stop(self, page, spider):
+        """Return ``False`` if the links of a page should not be followed.
+
+        The difference to :meth:`follow` is that this runs after
+        :meth:`save`.
+        """
+        return False
+
+    def skip_download(self, link, spider):
+        """Return ``True`` if the link should not be downloaded.
+
+        This does not affect the flow. The database of links from
+        the mirror will be used to process the link.
+        """
+        return False
+
+    def configure_session(self, session):
+        """Allows configuring the general environment.
+        """
+
+    def configure_request(self, request, link, spider):
+        """Allows configuring the request for each link.
+        """
+
+
+class DefaultRules(Rules):
+    """Implement some sensible default behaviour.
+    """
+
+    def expiration_check(self, link, spider):
+        if not link.url in spider.mirror.url_info:
+            return False
+
+        # An expires header allows us to skip completely.
+        expires = spider.mirror.url_info[link.url].get('expires')
+        if expires and expires > datetime.datetime.utcnow():
+            return 'not-expired'
+
+    def skip_download(self, link, spider):
+        return self.expiration_check(link.url, spider)
+
+    def configure_request(self, request, link, spider):
+        etag = last_modified = False
+        if link.url in spider.mirror.url_info:
+            etag = spider.mirror.url_info[link.url].get('etag') or False
+            last_modified = spider.mirror.url_info[link.url].get('last-modified') or False
+        if etag:
+            request.headers['if-none-match'] = etag
+        if last_modified:
+            request.headers['if-modified-since'] = last_modified
 
 
 class Spider(object):
@@ -342,59 +384,61 @@ class Spider(object):
             self.events.follow_state_changed(link, skipped='rule-deny')
             return
 
-        # Before we download that document, check if it is already in
-        # the local mirror; if so, send along an etag or timestamp
-        # that we might have.
-        etag = modified = None
-        if link.url in self.mirror.url_info:
-            etag = self.mirror.url_info[link.url].get('etag') or False
-            modified = self.mirror.url_info[link.url].get('last-modified') or False
+        # Give the rules the option to skip the download, relying
+        # on the information in the mirror instead.
+        skip_download = self.rules.skip_download(link, self)
 
-        # Go ahead with the request
-        response = link.resolve(self, 'full', etag=etag, last_modified=modified)
-        if response is False:
-            # This request failed at the connection stage
-            if link.retries <= self.max_retries:
-                link = link.retry()
-                self.events.follow_state_changed(link, failed='connect-error')
-                return True
+        if not skip_download:
+            # Go ahead with the request
+            response = link.resolve(self, 'full')
+            if response is False:
+                # This request failed at the connection stage
+                if link.retries <= self.max_retries:
+                    link = link.retry()
+                    self.events.follow_state_changed(link, failed='connect-error')
+                    return True
 
-            return False
+                return False
 
-        # If we have been redirected to a different url, add that
-        # url to the queue again.
-        if response.redirects:
-            redir_link = Link(
-                response.redirects[-1].url, previous=link.previous, **link.info)
-            self._link_queue.append(redir_link)
-            self.events.added_to_queue(link)
-            response.close()
+            # If we have been redirected to a different url, add that
+            # url to the queue again.
+            if response.redirects:
+                redir_link = Link(
+                    response.redirects[-1].url, previous=link.previous, **link.info)
+                self._link_queue.append(redir_link)
+                self.events.added_to_queue(link)
+                response.close()
 
-            # The mirror needs to know about the redirect. The status
-            # code if the first redirect in a chain determines the type
-            # (i.e. permanent, temporary etc)
-            self.mirror.add_redirect(
-                link, redir_link, response.status_code)
+                # The mirror needs to know about the redirect. The status
+                # code if the first redirect in a chain determines the type
+                # (i.e. permanent, temporary etc)
+                self.mirror.add_redirect(
+                    link, redir_link, response.status_code)
 
-            self.events.follow_state_changed(link, failed='redirect')
-            return
+                self.events.follow_state_changed(link, failed='redirect')
+                return
 
-        # Do not follow errors
-        if response.status_code >= 400:
-            self.events.follow_state_changed(link, failed='http-error')
-            return
+            # Do not follow errors
+            if response.status_code >= 400:
+                self.events.follow_state_changed(link, failed='http-error')
+                return
 
-        # If we have received a 304 not modified response, we are happy
-        response_was_304 = response.status_code == 304
-        if response_was_304:
-            self.events.follow_state_changed(link, failed='not-modified')
+            # If we have received a 304 not modified response, we are happy
+            response_was_304 = response.status_code == 304
+            if response_was_304:
+                self.events.follow_state_changed(link, failed='not-modified')
+            else:
+                self.events.follow_state_changed(link, success=True)
+
         else:
-            self.events.follow_state_changed(link, success=True)
+            # We did not download this url
+            self.events.follow_state_changed(link, failed='not-expired')
+            response = False
 
         # Attach a link parser now, which will start to work when needed.
         # The mirror might need the links during save, or the spider when
         # the @stop rules pass. Or we might get away without parsing.
-        if not response_was_304:
+        if response and not response_was_304:
             parser_class = get_parser_for_mimetype(get_content_type(response))
             if parser_class:
                 response.parsed = parser_class(response.content, response.url,
@@ -405,7 +449,7 @@ class Spider(object):
 
         # Save the file locally?
         if self.mirror:
-            if not response_was_304:
+            if not skip_download and not response_was_304:
                 if self.rules.save(link, self):
                     self.mirror.add(link, response)
                     self.events.save_state_changed(link, saved=True)
@@ -427,10 +471,10 @@ class Spider(object):
 
         # Process follow up links.
         #
-        # If we have a "304 not modified response", then the mirror
+        # If we didn't properly download a full response, then the mirror
         # can tell us the urls that this page is pointing to.
         num_links = 0
-        if response_was_304:
+        if skip_download or response_was_304:
             for link_url, info in self.mirror.url_info[link.url]['links']:
                 try:
                     new_link = Link(link_url, previous=link, **info)
