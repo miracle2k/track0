@@ -107,7 +107,10 @@ class Link(object):
         # contain an anchor; we need to maintain this anchor when we
         # put the url inside a locally saved copy, but we do not want
         # it to interfere with duplicate detection.
-        self.original_url = urlnorm.norm(url)
+        try:
+            self.original_url = urlnorm.norm(url)
+        except urlnorm.InvalidUrl as e:
+            raise urlnorm.InvalidUrl('{}: {}'.format(e, url))
 
         # For the normalized url that we'll be exposing, remove the
         # fragment, and treat https and http the same.
