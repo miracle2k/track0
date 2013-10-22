@@ -2,8 +2,11 @@ from collections import deque
 import datetime
 import email
 from itertools import chain
+import mimetypes
 import reppy.cache
+import re
 import requests
+from requests.models import Response
 from urllib.parse import urlparse, urldefrag
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 import urlnorm
@@ -243,6 +246,44 @@ class Link(object):
         return '<Link {0}>'.format(self.url)
 
 
+class LocalFile(Link):
+    """A locally-loaded file that can be added to the queue.
+    """
+
+    def __init__(self, content, url, filename=None, **more):
+        super().__init__(url, **more)
+        self.content = content
+        self.filename = filename
+
+    def resolve(self, spider, type):
+        content = self.content
+        if hasattr(content, 'read'):
+            content = self.content.read()
+
+        # Return a fake response
+        response = Response()
+        response._content = content
+        response.url = self.url
+        response.status_code = 200
+        response.redirects = []
+
+        # Determine a mimetype
+        for name in (self.url, self.filename):
+            guessed_type = mimetypes.guess_type(name)[0]
+            if guessed_type and get_parser_for_mimetype(guessed_type):
+                found_type = guessed_type
+                break
+        else:
+            # Assume a HTML file
+            found_type = 'text/html'
+        response.headers['content-type'] = found_type
+
+        return response
+
+    def __repr__(self):
+        return '<LocalFile {0}>'.format(self.url)
+
+
 def get_content_type(response):
     """Helper that strips out things like ";encoding=utf-8".
     """
@@ -376,9 +417,24 @@ class Spider(object):
     def add(self, url, **kwargs):
         """Add a new Link to be processed.
         """
-        opts = dict(previous=None, source='user')
-        opts.update(kwargs)
-        link = Link(url, **opts)
+        if isinstance(url, Link):
+            link = url
+        else:
+            # It is possible to attach extra data to a link using a {}
+            # syntax, for example for a local file:
+            #    input.html{http://example.org}
+            url, data = re.match(r'^(.*?)(?:\{([^}]*)\})?$', url).groups()
+
+            # Options for this link
+            opts = dict(previous=None, source='user')
+            opts.update(kwargs)
+
+            if not urlparse(url).scheme:
+                # This appears to be a local file
+                with open(url, 'rb') as f:
+                    link = LocalFile(f.read(), filename=url, url=data, **opts)
+            else:
+                link = Link(url, **opts)
         self._link_queue.appendleft(link)
 
     def _add(self, url, **opts):
@@ -499,7 +555,12 @@ class Spider(object):
         add_to_known_list = True
         if self.mirror:
             if not skip_download and not response_was_304:
-                if self.rules.save(link, self):
+                if isinstance(link, LocalFile):
+                    # Local files are used as starting points only, they
+                    # are not saved or otherwise treated as real.
+                    self.events.save_state_changed(link, saved=False)
+                    add_to_known_list = False
+                elif self.rules.save(link, self):
                     self.mirror.add(link, response)
                     self.events.save_state_changed(link, saved=True)
                 else:

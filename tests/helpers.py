@@ -240,3 +240,13 @@ def spider(**kwargs):
 @pytest.fixture(scope='session')
 def spiderfactory():
     return spider
+
+
+@contextmanager
+def block(obj):
+    """Noop context manager that is only useful to stylistically group code.
+    """
+    try:
+        yield obj
+    finally:
+        pass

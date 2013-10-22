@@ -725,7 +725,6 @@ class HeaderLinkParser(Parser):
             yield link['url'], opts
 
 
-
 def get_parser_for_mimetype(mimetype):
     if mimetype == 'text/html':
         return HTMLParser

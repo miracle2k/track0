@@ -1,5 +1,5 @@
 import pytest
-from .helpers import rules, internet, arglogger
+from .helpers import rules, internet, arglogger, block
 from tests.test_cli import testable_cli_rules
 from track.cli import CLIRules, Script
 
@@ -323,3 +323,55 @@ class TestSkipDownload:
             spider.loop()
 
             assert net.requests[net[0]] == 0
+
+
+class TestLocalFiles:
+
+    def test_basic_dealing_with_localfile(self, spider, tmpdir):
+        file = tmpdir.join('input.html')
+        file.write('<a href="google"></a>')
+        spider.add('{}{}'.format(file.strpath, '{http://example.org}'))
+        spider.process_one()
+
+        assert len(spider) == 1
+        assert spider._link_queue[0].url == 'http://example.org/google'
+
+    def test_css_localfile(self, spiderfactory, tmpdir):
+        css = """background-image: url('test.gif');"""
+
+        # Filename indicates the CSS nature
+        with block(spiderfactory()) as spider:
+            file = tmpdir.join('input.css')
+            file.write(css)
+            spider.add('{}{}'.format(file.strpath, '{http://example.org}'))
+            spider.process_one()
+            assert len(spider) == 1
+            assert spider._link_queue[0].url == 'http://example.org/test.gif'
+
+        # URL indicates the CSS nature
+        with block(spiderfactory()) as spider:
+            file = tmpdir.join('input')
+            file.write(css)
+            spider.add('{}{}'.format(file.strpath, '{http://example.org/input.css}'))
+            spider.process_one()
+            assert len(spider) == 1
+            assert spider._link_queue[0].url == 'http://example.org/test.gif'
+
+        # Nothing indicates the CSS nature
+        with block(spiderfactory()) as spider:
+            file = tmpdir.join('input')
+            file.write(css)
+            spider.add('{}{}'.format(file.strpath, '{http://example.org/}'))
+            spider.process_one()
+            # This was not parsed as CSS so no link was found
+            assert len(spider) == 0
+
+    def test_never_mirrored(self, tmpdir, spider):
+        """Local file links are never added to the mirror."""
+        file = tmpdir.join('input.html')
+        file.write('<a href="google"></a>')
+        spider.add('{}{}'.format(file.strpath, '{http://example.org}'))
+        spider.process_one()
+
+        assert len(spider.mirror.encountered_urls) == 0
+
