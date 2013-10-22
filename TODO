@@ -34,3 +34,7 @@ saved, or a non-HTTP replay of the action through known-links only.
 
 Add wget-like host checking. Possibly we can also do some md5 hasing magic
 to figure out if a www. host is the same.
+
+Support reading cookies from browsers:
+    http://pentesterscript.wordpress.com/2013/08/11/extract-data-from-chrome-database/
+    http://www.guyrutenberg.com/2010/11/27/building-cookiejar-out-of-firefoxs-cookies-sqlite/
