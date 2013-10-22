@@ -889,55 +889,60 @@ class Script:
         #    environment-setup type options (like output path) as opposed
         #    to behaviour details (like the user agent).
         #
-        # Affecting the local mirror
-        parser.add_argument(
-            '-O', '--path',
-            help='output directory for the mirror')
-        parser.add_argument(
-            '--layout',
-            help='a custom layout for organizing the files in the target '
-                 'directory; use tests as variables, e.g. {domain}')
-        parser.add_argument(
-            '--no-link-conversion', action='store_true',
-            help='do not modify urls in the local copy in any way')
-        parser.add_argument(
-            '--backups', action='store_true',
-            help='will store an unmodified copy of each file in a ./backups '
-                 'subfolder; unaffected by link conversion and deletion.')
-        parser.add_argument(
-            '--no-live-update', action='store_true',
-            help='delay local mirror modifications until the spider is done')
-
-        # How to deal with existing files.
-        parser.add_argument(
-            '-U', '--update', action='store_true',
-            help="use the command line options previously used when an"
-                 "existing mirror was created")
-        parser.add_argument(
-            '--enable-delete', action='store_true',
-            help='delete existing local files no encountered by the spider')
-        parser.add_argument(
-            '--no-modified-check', action='store_true',
-            help='do not check if an existing file has been modified on the '
-                 'server')
-        parser.add_argument(
-            '--trust-expires', action='store_true',
-            help='skip checking files for updates if the expires header allows')
 
         # Affecting the start urls
-        parser.add_argument(
+        urls_group = parser.add_argument_group('starting urls')
+        urls_group.add_argument(
             '-F', '--from-file', action='append', metavar='FILE',
             help='Add urls from the file, one per line; can be given multiple times')
-        parser.add_argument(
+        urls_group.add_argument(
             'url', nargs='*', metavar='url',
             help='urls to be added to the queue initially as a starting point')
 
+        # Affecting the local mirror
+        mirror_group = parser.add_argument_group('local mirror')
+        mirror_group.add_argument(
+            '-O', '--path',
+            help='output directory for the mirror')
+        mirror_group.add_argument(
+            '--layout',
+            help='a custom layout for organizing the files in the target '
+                 'directory; use tests as variables, e.g. {domain}')
+        mirror_group.add_argument(
+            '--no-link-conversion', action='store_true',
+            help='do not modify urls in the local copy in any way')
+        mirror_group.add_argument(
+            '--backups', action='store_true',
+            help='will store an unmodified copy of each file in a ./backups '
+                 'subfolder; unaffected by link conversion and deletion.')
+        mirror_group.add_argument(
+            '--no-live-update', action='store_true',
+            help='delay local mirror modifications until the spider is done')
+
+        # How to deal with existing files
+        update_group = parser.add_argument_group('updating a mirror')
+        update_group.add_argument(
+            '-U', '--update', action='store_true',
+            help="use the command line options previously used when an"
+                 "existing mirror was created")
+        update_group.add_argument(
+            '--enable-delete', action='store_true',
+            help='delete existing local files no encountered by the spider')
+        update_group.add_argument(
+            '--no-modified-check', action='store_true',
+            help='do not check if an existing file has been modified on the '
+                 'server')
+        update_group.add_argument(
+            '--trust-expires', action='store_true',
+            help='skip checking files for updates if the expires header allows')
+
         # Affecting the UA behaviour, browsing process
-        parser.add_argument(
+        browing_group = parser.add_argument_group('browsing options')
+        browing_group.add_argument(
             '--user-agent',
             help="user agent string to use; the special values 'firefox', "
                  "'safari', 'chrome', 'ie' are recognized")
-        parser.add_argument(
+        browing_group.add_argument(
             '--cookies', choices=('persist', 'accept', 'refuse', 'block'),
             default='persist',
             help="how to deal with cookies; persist = on disk for next time,"
@@ -945,17 +950,18 @@ class Script:
                  "cookies, but use previous cookies from disk, block = "
                  "additionally ignore disk cookies")
 
-        parser.add_argument(
+        rules_group = parser.add_argument_group('rules')
+        rules_group.add_argument(
             '@follow', nargs='+', metavar='rule', default=['-', '+requisite'],
             help="rules that determine whether a url will be downloaded; default"
                  "is '- _requisite', meaning only the url itself and it's assets"
                  "are followed")
-        parser.add_argument(
+        rules_group.add_argument(
             '@save', nargs='+', metavar='rule', default=['+'],
             help="rules that determine whether a url will be saved; default "
                  "rule is '+', meaning everything that passes @follow is "
                  "saved")
-        parser.add_argument(
+        rules_group.add_argument(
             '@stop', nargs='+', metavar= 'rule', default=['-'],
             help="rarely needed: rules that prevent a url from being analyzed"
                  "for further links; default rule is '-' (never stop)")
