@@ -26,9 +26,10 @@ setup(
     packages=['track'],
     install_requires=[
         'requests',
-        'urlnorm==custom,>=1.1.2',
+        'urlnorm==custom,<99999',
         'charade',
-        'reppy>=0.2.2'
+        'html5lib',
+        'reppy==custom,<99999'
     ],
     test_requires=[
         'pytest',
@@ -36,6 +37,7 @@ setup(
     ],
     dependency_links=[
         'https://github.com/miracle2k/urlnorm/archive/python3.zip#egg=urlnorm-custom',
+        'https://github.com/miracle2k/reppy/archive/0eeb95.zip#egg=reppy-custom',
     ],
     entry_points="""[console_scripts]\ntrack = track.cli:run\n""",
 )
