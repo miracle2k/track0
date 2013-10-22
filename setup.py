@@ -39,6 +39,6 @@ setup(
         'https://github.com/miracle2k/urlnorm/archive/python3.zip#egg=urlnorm-custom',
         'https://github.com/miracle2k/reppy/archive/0eeb95.zip#egg=reppy-custom',
     ],
-    entry_points="""[console_scripts]\ntrack = track.cli:run\n""",
+    entry_points="""[console_scripts]\ntrack0 = track.cli:run\n""",
 )
 
