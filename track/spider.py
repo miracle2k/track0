@@ -340,7 +340,7 @@ class Rules(object):
         """
         return False
 
-    def configure_session(self, session):
+    def configure_session(self, session, spider):
         """Allows configuring the general environment.
         """
 
@@ -365,7 +365,7 @@ class DefaultRules(Rules):
     def skip_download(self, link, spider):
         return self.expiration_check(link.url, spider)
 
-    def configure_session(self, session):
+    def configure_session(self, session, spider):
         session.headers.update({
             'User-Agent': 'Track/alpha',
         })
@@ -402,7 +402,7 @@ class Spider(object):
     def session(self):
         if not hasattr(self, '_session'):
             self._session = self.session_class()
-            self.rules.configure_session(self._session)
+            self.rules.configure_session(self._session, self)
         return self._session
 
     @property

@@ -225,14 +225,14 @@ class Mirror(object):
             os.makedirs(path.dirname(full_filename))
         return open(full_filename, mode)
 
-    def open_shelve(self, filename):
+    def open_shelve(self, filename, flag='c'):
         """Open a persistent dictionary.
         """
         track_dir = path.join(self.directory, '.track')
         if not path.exists(track_dir):
             os.makedirs(track_dir)
 
-        return shelve.open(path.join(track_dir, filename))
+        return shelve.open(path.join(track_dir, filename), flag=flag)
 
     def add(self, link, response):
         """Store the given page.

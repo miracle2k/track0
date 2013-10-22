@@ -10,7 +10,7 @@ def testable_cli_rules(**args):
     """Return a CLIRules instance that uses our test internet."""
     from .helpers import rules
     cli_rules = CLIRules(Script.get_default_namesspace(**args))
-    cli_rules.configure_session = lambda s: rules.configure_session(cli_rules, s)
+    cli_rules.configure_session = lambda s, p: rules.configure_session(cli_rules, s, p)
     return cli_rules
 
 

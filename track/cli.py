@@ -11,6 +11,7 @@ from os.path import commonprefix, normpath, abspath, basename, splitext, join
 import argparse
 from track.mirror import Mirror
 from track.spider import Spider, DefaultRules, get_content_type, Events
+from track.utils import ShelvedCookieJar, RefuseAll
 
 
 class Redirect(Exception):
@@ -643,8 +644,8 @@ class CLIRules(DefaultRules):
         if self.arguments.trust_expires:
             return self.expiration_check(link, spider)
 
-    def configure_session(self, session):
-        super().configure_session(session)
+    def configure_session(self, session, spider):
+        super().configure_session(session, spider)
 
         # Overwrite our default user agent with the user's choice
         user_agent = UserAgents.get(
@@ -653,6 +654,16 @@ class CLIRules(DefaultRules):
             session.headers.update({
                 'User-Agent': user_agent,
             })
+
+        # Install a cookie jar
+        cookie_shelve = spider.mirror.open_shelve('cookies')
+        if self.arguments.cookies in ('persist',):
+            session.cookies = ShelvedCookieJar(cookie_shelve)
+        else:
+            if not self.arguments.cookies == 'block':
+                session.cookies.update(cookie_shelve)
+            if self.arguments.cookies == 'refuse':
+                session.cookies.policy = RefuseAll()
 
 
 class URLFormatter(string.Formatter):
@@ -921,11 +932,18 @@ class Script:
             'url', nargs='*', metavar='url',
             help='urls to be added to the queue initially as a starting point')
 
-        # Affecting the parsing process
+        # Affecting the UA behaviour, browsing process
         parser.add_argument(
             '--user-agent',
             help="user agent string to use; the special values 'firefox', "
                  "'safari', 'chrome', 'ie' are recognized")
+        parser.add_argument(
+            '--cookies', choices=('persist', 'accept', 'refuse', 'block'),
+            default='persist',
+            help="how to deal with cookies; persist = on disk for next time,"
+                 "accept = forget when finished, refuse = no not accept new"
+                 "cookies, but use previous cookies from disk, block = "
+                 "additionally ignore disk cookies")
 
         parser.add_argument(
             '@follow', nargs='+', metavar='rule', default=['-', '+requisite'],

@@ -134,7 +134,7 @@ class rules(BaseRules):
             return self._stop(link)
         return bool(self._stop)
 
-    def configure_session(self, session):
+    def configure_session(self, session, spider):
         session.mount('http://', TestAdapter())
         session.mount('https://', TestAdapter())
 
