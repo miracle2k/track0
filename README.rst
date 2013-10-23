@@ -96,6 +96,14 @@ text (``domain=google.com``) and tests that compare numbers
 (``depth<3``).
 
 
+Installation
+------------
+
+Python 3.3 is required on your machine::
+
+    $ sudo easy_install3 track0
+
+
 Why?
 ----
 
@@ -128,6 +136,7 @@ not aware of each other.
 (*) There is limited support for checking the timestamps of existing
 files, but only if it's links have not been adjusted, or backup copies
 exist.
+
 
 
 More documentation
