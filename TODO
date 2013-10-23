@@ -38,3 +38,8 @@ to figure out if a www. host is the same.
 Support reading cookies from browsers:
     http://pentesterscript.wordpress.com/2013/08/11/extract-data-from-chrome-database/
     http://www.guyrutenberg.com/2010/11/27/building-cookiejar-out-of-firefoxs-cookies-sqlite/
+
+Support sitemaps - from robots.txt, and possibly without it.
+
+Detect files deleted manually by the user. They are still in the database
+and are considered to exist, but should instead be recognized as gone.
