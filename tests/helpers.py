@@ -227,6 +227,8 @@ class arglogger:
         return self.return_value
     def arg(self, idx):
         return [args[idx] for args, kwargs in self.calls]
+    def kwarg(self, name):
+        return [kwargs.get(name) for args, kwargs in self.calls]
 
 
 @pytest.fixture(scope='function')

@@ -213,7 +213,7 @@ class Link(object):
                 # Handle redirects manually
                 allow_redirects=False)
 
-            redirects = spider.session.resolve_redirects(
+            redirects = list(spider.session.resolve_redirects(
                 response, request,
                 # Important: We do NOT fetch the body of the final url
                 # (and hopefully `resolve_redirects` wouldn't waste any
@@ -222,9 +222,11 @@ class Link(object):
                 # url is not to be processed, we will not have wasted
                 # bandwidth.
                 # TODO: Consider doing the redirect resolving using HEAD.
-                stream=False)
+                stream=False))
 
-            response.redirects = list(redirects)
+            response.redirects = redirects
+            if redirects and redirects[-1].url == self.original_url:
+                raise TooManyRedirects()
 
             self.response = response
         except (TooManyRedirects):

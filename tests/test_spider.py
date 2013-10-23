@@ -274,6 +274,21 @@ class TestRedirects:
             # matching the size filter
             assert len(spider.mirror.encountered_urls) == 1
 
+    def test_ident_redirect(self, spider):
+        """A url redirecting to itself.
+        """
+        with internet(**{
+            'http://example.org/foo': dict(
+                    status=302,
+                    headers={'Location': 'http://example.org/foo'}),
+        }) as urls:
+            spider.events.follow_state_changed = arglogger()
+            spider.add(urls[0])
+            spider.process_one()
+
+            # Redirect is not added, this is an error
+            assert len(spider) == 0
+            assert spider.events.follow_state_changed.kwarg('failed')
 
 
 class TestSkipDownload:
