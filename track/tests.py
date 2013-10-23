@@ -1,7 +1,12 @@
 from genericpath import commonprefix
 from os.path import basename, splitext
-from track.cli import Redirect
 from track.spider import get_content_type
+
+
+class Redirect(Exception):
+    """A test that detects a redirect and for this reason knows it cannot
+    provide the right value would raise this.
+    """
 
 
 class TestImpl(object):

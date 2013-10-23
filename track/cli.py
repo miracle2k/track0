@@ -11,14 +11,8 @@ from os.path import normpath, abspath, join
 import argparse
 from .mirror import Mirror
 from .spider import Spider, DefaultRules, Events
-from .tests import AvailableTests
+from .tests import AvailableTests, Redirect
 from .utils import ShelvedCookieJar, RefuseAll
-
-
-class Redirect(Exception):
-    """A test that detects a redirect and for this reason knows it cannot
-    provide the right value would raise this.
-    """
 
 
 UNITS = {
