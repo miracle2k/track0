@@ -104,12 +104,10 @@ class Link(object):
     """
 
     def __init__(self, url, previous=None, **info):
-        # Normalize the url. This means case-sensitivity, and a whole
-        # lot of other things that the urlnorm library will do for us.
-        # It does also mean lossy operations though: The link may
-        # contain an anchor; we need to maintain this anchor when we
-        # put the url inside a locally saved copy, but we do not want
-        # it to interfere with duplicate detection.
+        # Apply the simple idempotent optimizations to all urls (no need to
+        # ever deal with "HTTP://.."). This means case-sensitivity, and a
+        # whole lot of other things that the urlnorm library will do for us.
+        # We call this the original url, even though it is a bit of a lie.
         try:
             self.original_url = urlnorm.norm(url)
         except urlnorm.InvalidUrl as e:
@@ -198,7 +196,7 @@ class Link(object):
 
         try:
             method = 'GET' if type == 'full' else 'HEAD'
-            request = requests.Request(method, self.url)
+            request = requests.Request(method, self.original_url)
             spider.rules.configure_request(request, self, spider)
 
             request = request.prepare()

@@ -270,11 +270,11 @@ class Mirror(object):
                 response.links_parsed,
                 response.parsed or ()):
             url_info['links'].append((url, info))
-        self.url_info[response.url] = url_info
+        self.url_info[link.url] = url_info
         # The url itself
-        self.encountered_urls[response.url] = rel_filename
-        self.stored_urls.setdefault(response.url, set())
-        self.stored_urls[response.url] |= {rel_filename}
+        self.encountered_urls[link.url] = rel_filename
+        self.stored_urls.setdefault(link.url, set())
+        self.stored_urls[link.url] |= {rel_filename}
         # Be sure to to update the reverse cache
         self._insert_into_url_usage(link.url, url_info['links'])
         # Make sure database is saved
@@ -283,7 +283,7 @@ class Mirror(object):
         # See if we should apply modifications now (as opposed to waiting
         # until the last response has been added).
         if self.write_at_once:
-            self._convert_links(response.url)
+            self._convert_links(link.url)
             self._create_index()
 
     def encounter_url(self, link):

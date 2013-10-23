@@ -1,9 +1,11 @@
 from collections import Counter
 from contextlib import contextmanager
 from io import BytesIO, TextIOWrapper
+from urllib.parse import urldefrag
 import pytest
 import requests.adapters
 from requests_testadapter import TestSession, Resp
+import urlnorm
 from track.spider import Spider as BaseSpider, Rules as BaseRules, Link
 from track.mirror import Mirror as BaseMirror
 
@@ -37,10 +39,11 @@ class TestAdapter(requests.adapters.HTTPAdapter, metaclass=Internet):
 
     def send(self, request, stream=False, timeout=None,
              verify=True, cert=None, proxies=None):
-        self.requests.update({request.url: 1})
-        if not request.url in self.urls:
+        url, fragment = urldefrag(request.url)
+        self.requests.update({url: 1})
+        if not url in self.urls:
             raise ConnectionError('no such virtual url', request.url)
-        resp = Resp(**self.urls[request.url])
+        resp = Resp(**self.urls[url])
         r = self.build_response(request, resp)
         if not stream:
             # force prefetching content unless streaming in use
@@ -164,7 +167,7 @@ def internet(**urls):
         # Support shortcut urls
         if not ':' in url:
             url = 'http://example.org/%s' % url
-        return Link(url).url   # normalized url
+        return urlnorm.norm(url)
 
     old_urls = TestAdapter.urls
     old_requests = TestAdapter.requests

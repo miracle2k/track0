@@ -278,9 +278,9 @@ class TestRedirects:
         """A url redirecting to itself.
         """
         with internet(**{
-            'http://example.org/foo': dict(
+            'https://example.org/foo': dict(
                     status=302,
-                    headers={'Location': 'http://example.org/foo'}),
+                    headers={'Location': 'https://example.org/foo'}),
         }) as urls:
             spider.events.follow_state_changed = arglogger()
             spider.add(urls[0])
