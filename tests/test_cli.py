@@ -1,9 +1,10 @@
 from tests.helpers import internet
-from track.cli import TestImpl, OperatorImpl, CLIRules, Script
+from track.cli import OperatorImpl, CLIRules, Script
 from track.spider import Link
 
 # Import fixtures
 from .helpers import spider, spiderfactory
+from track.tests import TestImpl
 
 
 def testable_cli_rules(**args):
