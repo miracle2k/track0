@@ -201,7 +201,7 @@ class Link(object):
                 method = 'HEAD'
             else:
                 method = 'POST' if self.post is not None else 'GET'
-            request = requests.Request(method, self.original_url, data=self.post)
+            request = spider.session.prepare_request(method, self.original_url, data=self.post)
             spider.rules.configure_request(request, self, spider)
 
             request = request.prepare()

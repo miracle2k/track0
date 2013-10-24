@@ -25,7 +25,7 @@ setup(
     license='BSD',
     packages=['track'],
     install_requires=[
-        'requests',
+        'requests>=2.0.1',
         'urlnorm==custom,<99999',
         'charade',
         'html5lib',
