@@ -133,7 +133,10 @@ class TestImpl(object):
             control, like controlling how deep to go. It even allows
             going upwards.
         """
-        return TestImpl.path_distance_to_original(link) >= 0
+        distance = TestImpl.path_distance_to_original(link)
+        if distance is False:
+            return False
+        return distance >= 0
 
     @staticmethod
     def path_level(link):

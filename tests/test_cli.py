@@ -17,6 +17,17 @@ def testable_cli_rules(**args):
 
 class TestRules(object):
 
+    def test_down(self):
+        test = lambda a,b: TestImpl.down(Link(a, Link(b)))
+
+        assert not test('http://example.org/bar', 'http://example.org/foo/')
+        assert not test('http://example.org/bar', 'http://example.org/foo')
+        assert test('http://example.org/foo/bar', 'http://example.org/foo')
+
+        # [regression]
+        assert not test('http://example.org/foo/bar', 'http://example.de/foo')
+
+
     def test_path_level(self):
         test = lambda a: TestImpl.path_level(Link(a))
 
