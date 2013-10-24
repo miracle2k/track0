@@ -390,3 +390,9 @@ class TestLocalFiles:
 
         assert len(spider.mirror.encountered_urls) == 0
 
+
+class TestPOST:
+
+    def test_add(self, spider):
+        spider.add('http://example.org{a=1,b=2}')
+        assert spider._link_queue[0].post == {'a': '1', 'b': '2'}

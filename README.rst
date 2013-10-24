@@ -282,6 +282,18 @@ that url will be followed.
 The key is that it runs after ``@save``, while ``@follow`` runs before.
 
 
+Sites that require login
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This is a work in progress.
+
+HTTP Auth is not yet supported. Cookie-based auth can be done by simulating
+a POST request:
+
+    track -O local-mirror --cookies persist http://example.org/login{user=foo,password=bar} @save -
+
+
 Redirects
 ~~~~~~~~~
 

@@ -1,6 +1,7 @@
 from collections import deque
 import datetime
 import email
+from functools import partial
 from itertools import chain
 import mimetypes
 import reppy.cache
@@ -124,6 +125,7 @@ class Link(object):
 
         self.set_previous(previous)
         self.info = info
+        self.post = None
 
         # Runtime data
         self.response = None
@@ -195,8 +197,11 @@ class Link(object):
             return self.response
 
         try:
-            method = 'GET' if type == 'full' else 'HEAD'
-            request = requests.Request(method, self.original_url)
+            if type == 'head':
+                method = 'HEAD'
+            else:
+                method = 'POST' if self.post is not None else 'GET'
+            request = requests.Request(method, self.original_url, data=self.post)
             spider.rules.configure_request(request, self, spider)
 
             request = request.prepare()
@@ -235,6 +240,10 @@ class Link(object):
             self.exception = e
 
         return self.response
+
+    def set_post(self, data):
+        """Make this link execute as a POST."""
+        self.post = data
 
     def retry(self):
         self.retries += 1
@@ -279,6 +288,11 @@ class LocalFile(Link):
         response.headers['content-type'] = found_type
 
         return response
+
+    def set_post(self, data):
+        # Local files do not support POST.
+        raise ValueError(
+            'POST data cannot be given for a local file: {0.url}'.format(self))
 
     def __repr__(self):
         return '<LocalFile {0}>'.format(self.url)
@@ -381,6 +395,31 @@ class DefaultRules(Rules):
             request.headers['if-modified-since'] = last_modified
 
 
+def parse_user_url(url):
+    """Supports url formats such as:
+
+        localfile.html{http://www.to-be-considered-here}
+        http://example.org{user=foo,passwd=bar}
+
+    TODO: Reconsider whether this should be part of the base Spider API.
+    """
+
+    url, data = re.match(r'^(.*?)(?:\{([^}]*)\})?$', url).groups()
+
+    is_local_file = not urlparse(url).scheme
+
+    post = None
+    if is_local_file:
+        with open(url, 'rb') as f:
+            link = partial(LocalFile, f.read(), filename=url, url=data)
+    else:
+        if data:
+            post = dict([item.split('=', 1) for item in data.split(',')])
+        link = partial(Link, url)
+
+    return link,post
+
+
 class Spider(object):
     """The main spider logic. Continuously download URLs and follow links.
     """
@@ -420,21 +459,13 @@ class Spider(object):
         if isinstance(url, Link):
             link = url
         else:
-            # It is possible to attach extra data to a link using a {}
-            # syntax, for example for a local file:
-            #    input.html{http://example.org}
-            url, data = re.match(r'^(.*?)(?:\{([^}]*)\})?$', url).groups()
-
-            # Options for this link
             opts = dict(previous=None, source='user')
             opts.update(kwargs)
 
-            if not urlparse(url).scheme:
-                # This appears to be a local file
-                with open(url, 'rb') as f:
-                    link = LocalFile(f.read(), filename=url, url=data, **opts)
-            else:
-                link = Link(url, **opts)
+            LinkPartial, post = parse_user_url(url)
+            link = LinkPartial(**opts)
+            if post:
+                link.set_post(post)
         self._link_queue.appendleft(link)
 
     def _add(self, url, **opts):
