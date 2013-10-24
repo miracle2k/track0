@@ -43,3 +43,6 @@ Support sitemaps - from robots.txt, and possibly without it.
 
 Detect files deleted manually by the user. They are still in the database
 and are considered to exist, but should instead be recognized as gone.
+
+The generated index.html file is a mess with all the requisites. It should
+probably only contain those files that were matched by non-requisite filters.
