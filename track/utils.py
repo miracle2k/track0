@@ -32,7 +32,7 @@ class ShelvedCookieJar(CookieJar):
         try:
             # We need to do this ourselves to make it persist
             d = self._cookies.setdefault(cookie.domain, {})
-            d.setdefault(cookie.path, {}).setdefault(cookie.name, cookie)
+            d.setdefault(cookie.path, {})[cookie.name] = cookie
             self._cookies[cookie.domain] = d
         finally:
             self._cookies_lock.release()
