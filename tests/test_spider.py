@@ -224,7 +224,7 @@ class TestRedirects:
             # Despite linking to `foo`, the local copy links to `bar`,
             # the redirect target of `foo`.
             content = spider.mirror.get_file('http://example.org/qux')
-            assert b'"./bar.htm"' in content
+            assert b'"./bar.html"' in content
 
     @pytest.mark.parametrize(('redir_code',), ((301,), (302,)))
     def test_external_redirects_in_mirror(self, spider, redir_code):

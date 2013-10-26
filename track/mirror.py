@@ -197,16 +197,15 @@ class Mirror(object):
         if filename.endswith(path.sep):
             filename = path.join(filename, 'index')
 
-        # If we are dealing with a file w/o an extension, add one
-        if not path.splitext(filename)[1]:
-            mime = get_content_type(response)
-            # We need to get a list of all possible extensions and pick
-            # on ourselves using sort(), since guess_extension() will
-            # return a different one each time.
-            extensions = mimetypes.guess_all_extensions(mime, strict=False)
-            extensions.sort()
+        # Chose the right file extension
+        mime = get_content_type(response)
+        extensions = mimetypes.guess_all_extensions(mime, strict=False)
+        # Set our extension if the existing one does not match the mime type
+        name_wo_ext, current_extension = path.splitext(filename)
+        if not current_extension or current_extension not in extensions:
+            extensions.sort(reverse=True)
             if extensions:
-                filename = '{0}{1}'.format(filename, extensions[0])
+                filename = '{0}{1}'.format(name_wo_ext, extensions[0])
 
         # If there is a query string, insert it before the extension
         if parsed.query:

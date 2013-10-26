@@ -1,5 +1,4 @@
 import pytest
-import requests
 from requests_testadapter import TestSession
 from tests.helpers import internet, TestAdapter
 from track.mirror import Mirror
@@ -46,6 +45,23 @@ def get_mirror_file(mirror, url):
         return f.read()
 
 
+class TestSelectFilename:
+
+    def get(self, mirror, url, **response_data):
+        link = Link(url)
+        response = fake_response(link, "", **response_data)
+        return mirror.get_filename(link, response)
+
+    def test_extension(self, mirror):
+        assert self.get(mirror, 'http://example.org/foo') == 'example.org/foo.html'
+        assert self.get(
+            mirror, 'http://example.org/foo.php',
+            headers={'content-type': 'text/html'}) == 'example.org/foo.html'
+        assert self.get(
+            mirror, 'http://example.org/foo.html',
+            headers={'content-type': 'text/html'}) == 'example.org/foo.html'
+
+
 class TestConvertLinks:
 
     def test_external_links_absolutized(self, mirror):
@@ -83,7 +99,7 @@ class TestConvertLinks:
         # Link conversion keeps #FOO around
         mirror._convert_links()
         assert get_mirror_file(mirror, link.url) == """
-        <a href="./index.htm#FOO">
+        <a href="./index.html#FOO">
         """
 
 
