@@ -202,6 +202,8 @@ class Link(object):
             else:
                 method = 'POST' if self.post is not None else 'GET'
             request = requests.Request(method, self.original_url, data=self.post)
+            if self.previous:
+                request.headers['Referer'] = self.previous.original_url
             spider.rules.configure_request(request, self, spider)
 
             request = spider.session.prepare_request(request)

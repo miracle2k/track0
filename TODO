@@ -1,4 +1,4 @@
-Support referers.
+Support customizing referer behaviour.
 
 When say a link tag defines a file as text/css, we could use this to save
 us a potential HEAD request when the content type is needed.
