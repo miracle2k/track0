@@ -64,6 +64,10 @@ class OperatorImpl:
         return cls._same(sys, user) and sys == user
 
     @classmethod
+    def inequality(cls, sys, user):
+        return not cls.equality(sys, user)
+
+    @classmethod
     def smaller(cls, sys, user):
         sys, user = cls._norm(sys, user)
         return cls._same(sys, user) and sys < user
@@ -87,6 +91,7 @@ class OperatorImpl:
 Operators = {
     '': OperatorImpl.truth,
     '=': OperatorImpl.equality,
+    '!=': OperatorImpl.inequality,
     '<': OperatorImpl.smaller,
     '>': OperatorImpl.larger,
     '<=': OperatorImpl.smaller_or_equal,
@@ -142,7 +147,7 @@ class CLIRules(DefaultRules):
             stack.pop(0)
         action = action == '+'
 
-        op_chars = ('<', '>', '=', '~')
+        op_chars = ('<', '>', '!', '=', '~')
 
         # The test name
         test_name = ''

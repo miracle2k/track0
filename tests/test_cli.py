@@ -134,6 +134,9 @@ class TestOperators(object):
         assert OperatorImpl.equality(1, 'abc') is False
         assert OperatorImpl.equality(False, '') is True
 
+        assert OperatorImpl.inequality(1, '1') is False
+        assert OperatorImpl.inequality(False, '') is False
+
         assert OperatorImpl.larger(4, '') is False
 
         assert OperatorImpl.smaller(800, '1K') is True
