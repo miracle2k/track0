@@ -120,7 +120,7 @@ class Link(object):
         self.lossy_url_data = {'fragment': fragment}
         if url.startswith('https:'):
             url = 'http' + url[5:]
-            self.lossy_url_data = {'protocol': 'https'}
+            self.lossy_url_data.update({'protocol': 'https'})
         self.url = url
 
         self.set_previous(previous)

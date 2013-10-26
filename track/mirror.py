@@ -259,6 +259,7 @@ class Mirror(object):
 
         # Add to database: data about the url
         url_info = {
+            'original_url': link.original_url,
             'mimetype': get_content_type(response),
             'etag': response.headers.get('etag'),
             'encoding': response.encoding,
@@ -269,7 +270,10 @@ class Mirror(object):
         for url, info in itertools.chain(
                 response.links_parsed,
                 response.parsed or ()):
-            url_info['links'].append((url, info))
+            try:
+                url_info['links'].append((Link(url).url, info))
+            except urlnorm.InvalidUrl:
+                pass
         self.url_info[link.url] = url_info
         # The url itself
         self.encountered_urls[link.url] = rel_filename
@@ -399,24 +403,25 @@ class Mirror(object):
             # A simple way to speed this up would also be to keep a
             # certain contingent of previously-parsed documents in memory.
             parsed = parser_class(
-                f.read(), url, encoding=self.url_info[url].get('encoding'))
+                f.read(),
+                self.url_info[url].get('original_url', url),
+                encoding=self.url_info[url].get('encoding'))
 
-            def replace_link(url):
+            def replace_link(raw_url):
                 # Abuse the URL class to normalize the url for matching
                 try:
-                    link = Link(url)
+                    link = Link(raw_url)
                 except urlnorm.InvalidUrl:
                     return
-                url = link.url
 
                 # See what we know about this link. Is the target url
                 # saved locally? Is it a known redirect?
                 local_filename = redir_url = redir_code = None
-                if url in url_database:
-                    local_filename = url_database[url]
+                if link.url in url_database:
+                    local_filename = url_database[link.url]
                 else:
-                    if url in self.redirects:
-                        redir_code, redir_url = self.redirects[url]
+                    if link.url in self.redirects:
+                        redir_code, redir_url = self.redirects[link.url]
                         if redir_url in url_database:
                             local_filename = url_database[redir_url]
 
@@ -432,9 +437,9 @@ class Mirror(object):
                     return redir_url
 
                 else:
-                    # We do not have a local copy. The url has already
-                    # been absolutized by the parser, we can simply
-                    # set it.
+                    # We do not have a local copy. We need the make sure
+                    # we set an absolute url with a host part instead.
+                    #
                     # We mustn't do this however for links that have
                     # already previously been replaced with a local
                     # link. We can find out if that is the case by
@@ -443,8 +448,10 @@ class Mirror(object):
                     # TODO: Not sure if this is fool-proof, or if we could
                     # in theory imagine a server-side link constructed in
                     # such a way that a match would occur here.
-                    if url in self.url_usage:
-                        return url
+                    if link.url in self.url_usage:
+                        # The url has already been absolutized by the
+                        # parser,  we can simply set it.
+                        return raw_url
             new_content = parsed.replace_urls(replace_link)
 
             # Write new file
