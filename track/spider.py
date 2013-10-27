@@ -214,7 +214,7 @@ class Link(object):
                 # TODO: Is it better to close() or to keep-alive?
                 # This also affects redirects handling, if we don't close
                 # we can't use the same connection to resolve redirects.
-                stream=False,  # method=='GET'
+                stream=True,  # method=='GET'
                 # Handle redirects manually
                 allow_redirects=False)
 
@@ -227,7 +227,7 @@ class Link(object):
                 # url is not to be processed, we will not have wasted
                 # bandwidth.
                 # TODO: Consider doing the redirect resolving using HEAD.
-                stream=False))
+                stream=True))
 
             response.redirects = redirects
             if redirects and redirects[-1].url == self.original_url:
