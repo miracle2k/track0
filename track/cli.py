@@ -13,7 +13,7 @@ import blessings
 from .mirror import Mirror
 from .spider import Spider, DefaultRules, Events
 from .tests import AvailableTests, Redirect
-from .utils import ShelvedCookieJar, RefuseAll, NoneDict
+from .utils import ShelvedCookieJar, RefuseAll, NoneDict, ElasticString, BlessedString, BetterTerminal
 
 
 UNITS = {
@@ -346,7 +346,7 @@ class CLIEvents(Events):
 
     def __init__(self, arguments, stream=None):
         self.arguments = arguments
-        self.term = blessings.Terminal(stream)
+        self.term = BetterTerminal(stream)
         self.stream = self.term.stream
 
         self.links = {}
@@ -400,13 +400,13 @@ class CLIEvents(Events):
         bail_state = self.links[link]['bail']
 
         t = self.term
-        standard = ''
+        standard = self.term.normal
         error = self.term.red
         success = self.term.green
         verbose = self.term.yellow
 
         status_style = standard
-        url_style = lambda s: s
+        url_style = ''
 
         # URL state/result identifier
         result = None
@@ -455,7 +455,7 @@ class CLIEvents(Events):
             num_links = bail_state['links_followed']
             total_links = bail_state['links_total']
             if num_links is not None:
-                num_links = ' +{}/{}'.format(t.bold(str(num_links)), total_links)
+                num_links = ' +{}/{}'.format(t.string('bold', str(num_links)), total_links)
             else:
                 num_links = ''
 
@@ -465,7 +465,8 @@ class CLIEvents(Events):
             passed_tests = [test for passed, test in (tests or []) if passed]
             if passed_tests:
                 last_test = passed_tests[-1]
-                last_test = (success if last_test.action else error)(last_test.pretty)
+                last_test = t.string(
+                    t.bright_green if last_test.action else error, last_test.pretty)
             return last_test
         follow_test = analyze_tests(follow_state['tests'])
         save_test = analyze_tests(save_state['tests'])
@@ -476,12 +477,12 @@ class CLIEvents(Events):
         if save_test and self.arguments.save != ['+']:
             test_state += ' @' + save_test
 
-        msg = '{result} {url}{num_links}{tests}'.format(
-            result=status_style(result), url=url_style(link.original_url),
-            num_links=num_links,
-            tests=test_state)
-
-        return msg
+        return ElasticString(
+            t.string(status_style, result+' '),
+            ElasticString.elastic(t.string(url_style, link.original_url)),
+            num_links,
+            test_state
+        )
 
 
 class LiveLogEvents(CLIEvents):
@@ -495,7 +496,7 @@ class LiveLogEvents(CLIEvents):
             return
 
         # Write new version of the link status line
-        self.stream.write(msg)
+        self.stream.write(msg.format(self.term.width))
         # Move to next line, output spider status
         self.stream.write(self.term.move_down)
         self.stream.write('  [{0[in_queue]} queued, {0[saved]} files saved, ? downloaded]'.format(self.stats))
@@ -509,7 +510,7 @@ class LiveLogEvents(CLIEvents):
             return
 
         # Write the final version of the link
-        self.stream.write(msg)
+        self.stream.write(msg.format(self.term.width))
         # Move to last line, which currently has the spider status
         self.stream.write(self.term.move_down)
         # Clear the spider status line
