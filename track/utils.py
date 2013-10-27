@@ -2,6 +2,9 @@ from http.cookiejar import CookieJar, CookiePolicy
 import shelve
 
 
+__all__ = ('ShelvedCookieJar', 'RefuseAll', 'NoneDict')
+
+
 class ShelvedCookieJar(CookieJar):
     """A cookie jar backed by a shelf.
 
@@ -48,3 +51,8 @@ class ShelvedCookieJar(CookieJar):
 class RefuseAll(CookiePolicy):
     def set_ok(self, cookie, request):
         return False
+
+
+class NoneDict(dict):
+    def __getitem__(self, key):
+        return dict.get(self, key)

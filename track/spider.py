@@ -469,6 +469,7 @@ class Spider(object):
             if post:
                 link.set_post(post)
         self._link_queue.appendleft(link)
+        self.events.added_to_queue(link)
 
     def _add(self, url, **opts):
         """Internal add-to-queue which refuses duplicates.
@@ -543,7 +544,7 @@ class Spider(object):
                 redir_link = Link(
                     response.redirects[-1].url, previous=link.previous, **link.info)
                 self._link_queue.append(redir_link)
-                self.events.added_to_queue(link)
+                self.events.added_to_queue(redir_link)
                 response.close()
 
                 # The mirror needs to know about the redirect. The status
@@ -610,6 +611,7 @@ class Spider(object):
                 # Mirror still needs to know we found this url so
                 # it won't be deleted during cleanup.
                 self.mirror.encounter_url(link)
+                self.events.save_state_changed(link, saved=True)
 
         # No need to process this url again
         if add_to_known_list:

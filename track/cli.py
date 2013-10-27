@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, Counter
 from contextlib import closing
 import hashlib
 import inspect
@@ -9,10 +9,11 @@ import sys
 import fnmatch
 from os.path import normpath, abspath, join
 import argparse
+import blessings
 from .mirror import Mirror
 from .spider import Spider, DefaultRules, Events
 from .tests import AvailableTests, Redirect
-from .utils import ShelvedCookieJar, RefuseAll
+from .utils import ShelvedCookieJar, RefuseAll, NoneDict
 
 
 UNITS = {
@@ -341,100 +342,205 @@ class CLIMirror(Mirror):
         return Mirror.get_filename(self, link, response)
 
 
-import colorama
-colorama.init()
-
 class CLIEvents(Events):
 
-    def __init__(self):
-        self.links = {}
+    def __init__(self, arguments, stream=None):
+        self.arguments = arguments
+        self.term = blessings.Terminal(stream)
+        self.stream = self.term.stream
 
-    def added_to_queue(self, link):
+        self.links = {}
+        self.stats = Counter({'in_queue': 0, 'saved': 0})
+
+    def init_db(self, link):
         self.links.setdefault(link, {
-            'follow': {},
-            'save': {},
-            'bail': {}
+            'follow': NoneDict(),
+            'save': NoneDict(),
+            'bail': NoneDict()
         })
 
+    def added_to_queue(self, link):
+        self.init_db(link)
+        self.stats['in_queue'] += 1
+
     def taken_by_processor(self, link):
-        self.added_to_queue(link)
-        self._output_link(link)
+        self.update_processor_status(link)
 
     def follow_state_changed(self, link, **kwargs):
-        self.added_to_queue(link)
         self.links[link]['follow'].update(kwargs)
-        self._output_link(link)
+        self.update_processor_status(link)
+
+    def save_state_changed(self, link, **kwargs):
+        self.links[link]['save'].update(kwargs)
+        if kwargs.get('saved'):
+            self.stats['saved'] += 1
+
+        self.update_processor_status(link)
 
     def bail_state_changed(self, link, **kwargs):
-        self.added_to_queue(link)
         self.links[link]['bail'].update(kwargs)
-        self._output_link(link)
+        self.update_processor_status(link)
 
     def completed(self, link):
-        self._output_link(link, True)
+        self.display_link_completed(link)
+        self.stats['in_queue'] -= 1
 
-    def _output_link(self, link, finalize=False):
-        state = self.links[link]['follow']
+    def update_processor_status(self, link):
+        raise NotImplementedError()
 
+    def display_link_completed(self, link):
+        raise NotImplementedError()
+
+    def finalize(self):
+        raise NotImplementedError()
+
+    def _format_link(self, link):
+        follow_state = self.links[link]['follow']
+        save_state = self.links[link]['save']
+        bail_state = self.links[link]['bail']
+
+        t = self.term
         standard = ''
-        error = colorama.Fore.RED
-        success = colorama.Fore.GREEN
-        verbose = colorama.Fore.YELLOW
-        style = standard
+        error = self.term.red
+        success = self.term.green
+        verbose = self.term.yellow
+
+        status_style = standard
+        url_style = lambda s: s
 
         # URL state/result identifier
         result = None
-        if 'success' in state:
-            result = ' + '
-            style = success
-        elif 'skipped' in state:
-            if state['skipped'] == 'duplicate':
-                result = 'dup'
-                style = standard
-                return
-            if state['skipped'] == 'rule-deny':
-                result = ' - '
-                style = verbose
-        elif 'failed' in state:
-            if state['failed'] == 'redirect':
-                result = ' → '
-                style = success
-            if state['failed'] in ('http-error', 'connect-error'):
-                result = 'err'
-                style = error
-            if state['failed'] == 'not-modified':
+        if 'success' in follow_state or follow_state['failed'] == 'not-modified':
+            if follow_state['success']:
+                result = ' + '
+                if save_state['saved']:
+                    result = ' ⚑ '
+            else:
                 result = '304'
-                style = success
+
+            status_style = success
+            if save_state['saved']:
+                url_style = t.bold
+            elif save_state['saved'] is False:
+                url_style = t.bright_yellow
+
+        elif 'skipped' in follow_state:
+            if follow_state['skipped'] == 'duplicate':
+                result = 'dup'
+                status_style = standard
+                return
+            if follow_state['skipped'] == 'rule-deny':
+                result = ' - '
+                status_style = verbose
+        elif 'failed' in follow_state:
+            if follow_state['failed'] == 'redirect':
+                result = ' → '
+                status_style = success
+            elif follow_state['failed'] in ('http-error', 'connect-error'):
+                result = 'err'
+                status_style = error
+                url_style = error
+            elif follow_state['failed'] == 'not-modified':
+                pass
+            else:
+                url_style = error
         if not result:
             result = '   '
-            style = error
+            status_style = error
 
         # Number of links found
-        num_links = self.links[link]['bail'].get('links_followed', None)
-        total_links = self.links[link]['bail'].get('links_total', None)
-        if num_links is not None:
-            num_links = '\033[1m' + ' +{}\033[0m/{}'.format(num_links, total_links)
+        if bail_state['bail']:
+            num_links = t.standout('[bail]')
         else:
-            num_links = ''
+            num_links = bail_state['links_followed']
+            total_links = bail_state['links_total']
+            if num_links is not None:
+                num_links = ' +{}/{}'.format(t.bold(str(num_links)), total_links)
+            else:
+                num_links = ''
 
         # The last test that passed
-        last_test = ''
-        passed_tests = [test for passed, test in state.get('tests', []) if passed]
-        if passed_tests:
-            last_test = passed_tests[-1]
-            last_test = ' '+(success if last_test.action else error)+ \
-                        last_test.pretty + colorama.Style.RESET_ALL
+        def analyze_tests(tests):
+            last_test = ''
+            passed_tests = [test for passed, test in (tests or []) if passed]
+            if passed_tests:
+                last_test = passed_tests[-1]
+                last_test = (success if last_test.action else error)(last_test.pretty)
+            return last_test
+        follow_test = analyze_tests(follow_state['tests'])
+        save_test = analyze_tests(save_state['tests'])
 
-        msg = '{style}{result}{reset} {url}{num_links}{last_test}'.format(
-            style=style, reset=colorama.Style.RESET_ALL,
-            result=result, url=link.original_url, num_links=num_links,
-            last_test=last_test)
+        test_state = ''
+        if follow_test:
+            test_state = ' @' + follow_test
+        if save_test and self.arguments.save != ['+']:
+            test_state += ' @' + save_test
 
-        import sys
-        sys.stdout.write(msg +  ('\n' if finalize else '\r'))
+        msg = '{result} {url}{num_links}{tests}'.format(
+            result=status_style(result), url=url_style(link.original_url),
+            num_links=num_links,
+            tests=test_state)
+
+        return msg
+
+
+class LiveLogEvents(CLIEvents):
+    """Log all links sequentially, continue updating each line
+    as the status changes.
+    """
+
+    def update_processor_status(self, link):
+        msg = self._format_link(link)
+        if not msg:
+            return
+
+        # Write new version of the link status line
+        self.stream.write(msg)
+        # Move to next line, output spider status
+        self.stream.write(self.term.move_down)
+        self.stream.write('  [{0[in_queue]} queued, {0[saved]} files saved, ? downloaded]'.format(self.stats))
+        # Move back
+        self.stream.write('\033M')
+        self.stream.write('\r')
+
+    def display_link_completed(self, link):
+        msg = self._format_link(link)
+        if not msg:
+            return
+
+        # Write the final version of the link
+        self.stream.write(msg)
+        # Move to last line, which currently has the spider status
+        self.stream.write(self.term.move_down)
+        # Clear the spider status line
+        self.stream.write(self.term.clear_eol)
 
     def finalize(self):
-        sys.stdout.write('\n')
+        # Move below both active lines
+        self.stream.write(self.term.move_down)
+        self.stream.write(self.term.move_down)
+
+
+class CurrentProcessorsView(CLIEvents):
+    """Once we support multiple processors, this would be designed to
+    have one line for each processor at the bottom.
+
+    When a processors finishes a link, it is logged above the processor
+    status area, and the processor status area moves a line further below.
+
+    This differs from :class:`LiveLogEvents`, where each link has it's
+    own line, which is updated, but the line itself does not move.
+    Therefore, with LiveLogEvents, if one processor takes very long, you
+    could imagine that line scrolling outside the screen (or even
+    the buffer?).
+    """
+
+
+class SequentialEvents(CLIEvents):
+    def update_processor_status(self):
+        pass
+    def display_link_completed(self):
+        pass
 
 
 class MyArgumentParser(argparse.ArgumentParser):
@@ -640,7 +746,8 @@ class Script:
 
         # Setup the spider
         try:
-            spider = Spider(CLIRules(namespace), mirror=mirror, events=CLIEvents())
+            spider = Spider(CLIRules(namespace),
+                            mirror=mirror, events=LiveLogEvents(namespace))
         except RuleError as e:
             print('error: {1}: {0}'.format(*e.args))
             return

@@ -29,7 +29,8 @@ setup(
         'urlnorm==custom,<99999',
         'charade',
         'html5lib',
-        'reppy==custom,<99999'
+        'reppy==custom,<99999',
+        'blessings==1.5.1'
     ],
     test_requires=[
         'pytest',
