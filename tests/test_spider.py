@@ -51,7 +51,7 @@ class TestNormalizeUrl:
 
             # the local link contains the fragment
             content = spider.mirror.get_file(uris[0])
-            assert b'"./foo.htm#some-fragment"' in content
+            assert b'"./foo.html#some-fragment"' in content
 
 
 class TestDuplicateHandling:
