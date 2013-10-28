@@ -6,7 +6,8 @@ import pytest
 import requests.adapters
 from requests_testadapter import TestSession, Resp
 import urlnorm
-from track.spider import Spider as BaseSpider, Rules as BaseRules, Link
+from track.parser import get_parser_for_mimetype, HeaderLinkParser
+from track.spider import Spider as BaseSpider, Rules as BaseRules, Link, get_content_type
 from track.mirror import Mirror as BaseMirror
 
 
@@ -206,8 +207,9 @@ def internet(**urls):
 
             # Setup some default headers
             data.setdefault('headers', {})
-            data['headers'].setdefault('content-length', len(data['stream']))
-            data['headers'].setdefault('content-type', 'text/html')
+            if not data.pop('no_defaults', False):
+                data['headers'].setdefault('content-length', len(data['stream']))
+                data['headers'].setdefault('content-type', 'text/html')
 
             final_urls[make_url(url)] = data
 
@@ -255,3 +257,32 @@ def block(obj):
         yield obj
     finally:
         pass
+
+
+def fake_response(link, content, **response_data):
+    """A fake response that can be added to the mirror.
+    """
+    redirects = response_data.pop('redirects', [])
+    # Use the fake internet system to generate a response object.
+    # This is more reliable than putting on together manually.
+    data = {'stream': content}
+    data.update(response_data)
+    with internet(**{link.original_url: data}):
+        session = TestSession()
+        session.mount('http://', TestAdapter())
+        session.mount('https://', TestAdapter())
+        response = session.request('GET', link.original_url)
+
+    # Additional attributes are expected. This is what the spider
+    # does before passing a link to mirror.add(). Possibly we should
+    # have less code duplication here with the actual spider code.
+    parser_class = get_parser_for_mimetype(get_content_type(response))
+    if parser_class:
+        response.parsed = parser_class(
+            response.content, response.url, encoding=response.encoding)
+    else:
+        response.parsed = None
+    response.links_parsed = HeaderLinkParser(response)
+    response.redirects = redirects
+    return response
+

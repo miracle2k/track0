@@ -1,10 +1,13 @@
+from pytest import raises
 from tests.helpers import internet
 from track.cli import OperatorImpl, CLIRules, Script
+from track.tests import Redirect
 from track.spider import Link
 
 # Import fixtures
-from .helpers import spider, spiderfactory
+from .helpers import spider, spiderfactory, fake_response
 from track.tests import TestImpl
+from track.utils import NoneDict
 
 
 def testable_cli_rules(**args):
@@ -13,6 +16,15 @@ def testable_cli_rules(**args):
     cli_rules = CLIRules(Script.get_default_namesspace(**args))
     cli_rules.configure_session = lambda s, p: rules.configure_session(cli_rules, s, p)
     return cli_rules
+
+
+def fake_resolve_link(link, content='', **kwargs):
+    def test_resolve(*a, **kw):
+        response = fake_response(link, content, **kwargs)
+        link.response = response
+        return response
+    link.resolve = test_resolve
+    return link
 
 
 class TestRules(object):
@@ -90,6 +102,23 @@ class TestRules(object):
         test = lambda a: TestImpl.fragment(Link(a))
 
         assert test('http://www.example.org/path/#fragment') == 'fragment'
+
+    def test_size(self):
+        test = lambda **kw: TestImpl.size(
+            fake_resolve_link(
+                Link('http://example.org'), no_defaults=True, **kw),
+            NoneDict())
+
+        # Prefer content-length header
+        assert test(headers={'content-length': 10}, content='123') == 10
+        # If no header, use actual content length
+        assert test(headers={}, content='123') == 3
+        # Do not stumble on invalid headers
+        assert test(headers={'content-length': 'foo'}, content='123') == 3
+        # raise special error for redirecting requests
+        raises(
+            Redirect,
+            test, headers={'content-length': 'foo'}, redirects=['http://foo'])
 
 
 def test_requisite_test(spiderfactory):

@@ -9,6 +9,15 @@ class Redirect(Exception):
     """
 
 
+def safe_int(s):
+    if s is None:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
 class TestImpl(object):
 
     @staticmethod
@@ -317,12 +326,12 @@ class TestImpl(object):
             return None
         if response.redirects:
             raise Redirect()
-        length = response.headers.get('content-length', None)
+        length = safe_int(response.headers.get('content-length', None))
         if length is None:
             response = link.resolve('full')
             if not response:
                 return None
-            length = response.headers.get('content-length', None)
+            length = safe_int(response.headers.get('content-length', None))
             if not length:
                 # Force downloading the content
                 length = len(response.content)

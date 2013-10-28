@@ -1,9 +1,7 @@
 import pytest
-from requests_testadapter import TestSession
-from tests.helpers import internet, TestAdapter
+from tests.helpers import fake_response
 from track.mirror import Mirror
-from track.parser import HeaderLinkParser, get_parser_for_mimetype
-from track.spider import Link, get_content_type
+from track.spider import Link
 
 
 @pytest.fixture(scope='function')
@@ -12,32 +10,6 @@ def mirror(tmpdir):
     mirror.write_at_once = False
     mirror.backups = False
     return mirror
-
-
-def fake_response(link, content, **response_data):
-    """A fake response that can be added to the mirror.
-    """
-    # Use the fake internet system to generate a response object.
-    # This is more reliable than putting on together manually.
-    data = {'stream': content}
-    data.update(response_data)
-    with internet(**{link.original_url: data}):
-        session = TestSession()
-        session.mount('http://', TestAdapter())
-        session.mount('https://', TestAdapter())
-        response = session.request('GET', link.original_url)
-
-    # Additional attributes are expected. This is what the spider
-    # does before passing a link to mirror.add(). Possibly we should
-    # have less code duplication here with the actual spider code.
-    parser_class = get_parser_for_mimetype(get_content_type(response))
-    if parser_class:
-        response.parsed = parser_class(
-            response.content, response.url, encoding=response.encoding)
-    else:
-        response.parsed = None
-    response.links_parsed = HeaderLinkParser(response)
-    return response
 
 
 def get_mirror_file(mirror, url):
