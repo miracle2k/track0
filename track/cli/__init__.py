@@ -12,7 +12,7 @@ import argparse
 from ..mirror import Mirror
 from ..spider import Spider, DefaultRules
 from .tests import AvailableTests, Redirect
-from track.cli.events import CLIEvents, LiveLogEvents
+from track.cli.events import CLIEvents, LiveLogEvents, SequentialEvents
 from .utils import BlessedString, BetterTerminal, ElasticString
 from ..utils import ShelvedCookieJar, RefuseAll
 
@@ -544,10 +544,15 @@ class Script:
         # Open the local mirror
         mirror = CLIMirror(namespace)
 
+        # Output to console differently if we have a tty vs piping
+        if not sys.stdout.isatty():
+            events = SequentialEvents(namespace, stream=sys.__stdout__)
+        else:
+            events = LiveLogEvents(namespace, stream=sys.__stdout__)
+
         # Setup the spider
         try:
-            spider = Spider(CLIRules(namespace),
-                            mirror=mirror, events=LiveLogEvents(namespace))
+            spider = Spider(CLIRules(namespace), mirror=mirror, events=events)
         except RuleError as e:
             print('error: {1}: {0}'.format(*e.args))
             return

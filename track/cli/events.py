@@ -9,7 +9,7 @@ class CLIEvents(Events):
 
     def __init__(self, arguments, stream=None):
         self.arguments = arguments
-        self.term = BetterTerminal(stream)
+        self.term = BetterTerminal(stream=stream)
         self.stream = self.term.stream
 
         self.links = {}
@@ -211,7 +211,19 @@ class CurrentProcessorsView(CLIEvents):
 
 
 class SequentialEvents(CLIEvents):
-    def update_processor_status(self):
+    """Display links as they complete, nothing fancy, no rewrites of
+    existing lines. This is for when the output is piped somewhere.
+    """
+
+    def update_processor_status(self, link):
         pass
-    def display_link_completed(self):
+
+    def finalize(self):
         pass
+
+    def display_link_completed(self, link):
+        msg = self._format_link(link)
+        if not msg:
+            return
+        self.stream.write(msg.format()+'\n')
+
