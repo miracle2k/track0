@@ -529,9 +529,9 @@ class Spider(object):
                 # This request failed at the connection stage
                 if link.exception:
                     if link.retries <= self.max_retries:
-                        link = link.retry()
-                        # TODO: Log specific reason more clearly...
-                        self.events.follow_state_changed(link, failed='connect-error')
+                        self.events.follow_state_changed(
+                            link, failed='connect-error', exception=link.exception)
+                        link.retry()
                         return True
                     return False
                 else:

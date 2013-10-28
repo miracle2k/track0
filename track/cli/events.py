@@ -1,4 +1,5 @@
 from collections import Counter
+from requests.exceptions import ConnectionError
 from track.spider import Events
 from track.utils import NoneDict
 from .utils import BetterTerminal, ElasticString
@@ -72,6 +73,7 @@ class CLIEvents(Events):
 
         # URL state/result identifier
         result = None
+        error_msg = ''
         if 'success' in follow_state or follow_state['failed'] == 'not-modified':
             if follow_state['success']:
                 result = ' + '
@@ -102,6 +104,11 @@ class CLIEvents(Events):
                 result = 'err'
                 status_style = error
                 url_style = error
+                if isinstance(follow_state['exception'], ConnectionError):
+                    error_msg = 'connection refused'
+                elif link.response.status_code:
+                    result = str(link.response.status_code)
+                    error_msg = link.response.reason
             elif follow_state['failed'] == 'not-modified':
                 pass
             else:
@@ -109,6 +116,9 @@ class CLIEvents(Events):
         if not result:
             result = '   '
             status_style = error
+
+        if error_msg:
+            error_msg = '[{}] '.format(error_msg)
 
         # Number of links found
         if bail_state['bail']:
@@ -141,6 +151,7 @@ class CLIEvents(Events):
 
         return ElasticString(
             t.string(status_style, result+' '),
+            t.string(error, error_msg),
             ElasticString.elastic(t.string(url_style, link.original_url)),
             num_links,
             test_state
