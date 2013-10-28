@@ -1,12 +1,12 @@
 from pytest import raises
 from tests.helpers import internet
 from track.cli import OperatorImpl, CLIRules, Script
-from track.tests import Redirect
+from track.cli.tests import Redirect
 from track.spider import Link
 
 # Import fixtures
 from .helpers import spider, spiderfactory, fake_response
-from track.tests import TestImpl
+from track.cli.tests import TestImpl
 from track.utils import NoneDict
 
 
