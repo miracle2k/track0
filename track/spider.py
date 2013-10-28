@@ -542,7 +542,8 @@ class Spider(object):
             # url to the queue again.
             if response.redirects:
                 redir_link = Link(
-                    response.redirects[-1].url, previous=link.previous, **link.info)
+                    response.redirects[-1].url, previous=link.previous,
+                    redirect_from=link.url, **link.info)
                 self._link_queue.append(redir_link)
                 self.events.added_to_queue(redir_link)
                 response.close()
@@ -616,6 +617,8 @@ class Spider(object):
         # No need to process this url again
         if add_to_known_list:
             self._known_urls.add(link.url)
+            if link.info.get('redirect_from'):
+                self._known_urls.add(link.info.get('redirect_from'))
 
         # Run a hook that makes it possible to stop now and ignore
         # all the urls contained in this page.

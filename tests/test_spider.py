@@ -136,6 +136,29 @@ class TestDuplicateHandling:
             spider.loop()
             assert len(list(net.requests.elements())) == 0
 
+    def test_duplicate_redirects(self, spider):
+        """A redirect is not followed a second time, if its target url
+        was successfully saved the first time.
+        """
+        with internet(**{
+            'http://example.org/foo1': dict(
+                    status=302,
+                    headers={'Location': 'http://example.org/bar'}),
+            'http://example.org/bar': {}
+        }) as net:
+            # Process the redirect once, sucessfully
+            spider.add('http://example.org/foo1', source=None)
+            spider.loop()
+            assert len(spider.mirror.stored_urls) == 1
+
+            # Process the same redirect again. It is filtered out as
+            # a dupliate right away, not requests sent.
+            requests_before = net.requests
+            spider.add('http://example.org/foo1', source=None)
+            spider.process_one()
+            assert len(spider) == 0
+            assert net.requests == requests_before
+
 
 def test_error_code(spider):
     """Error pages are ignored; they are never saved nor followed.
