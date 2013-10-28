@@ -175,7 +175,7 @@ class TestImpl(object):
 
         The distance can be positive or negative.
 
-        There is no distance between ``/foo/`` and ``/bar/`, nor is there
+        There is no distance between ``/foo/`` and ``/bar/``, nor is there
         a distance between two urls on different domains. The test will
         never pass in such cases.
         """

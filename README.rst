@@ -93,7 +93,9 @@ steps, because the depth test is the final step all urls have to pass.
 
 There are simple yes/no tests (``original-domain``), tests that match
 text (``domain=google.com``) and tests that compare numbers
-(``depth<3``).
+(``depth<3``). See the full list of `available tests`_.
+
+.. _available tests: https://github.com/miracle2k/track0/wiki/Available-Tests
 
 
 Installation
