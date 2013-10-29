@@ -349,6 +349,97 @@ file; the download generator will remain intact, rather than linking to
 the internal file.
 
 
+Understanding the output
+------------------------
+
+.. raw:: html
+
+    <style type="text/css">
+      ol.p1 {
+        padding: 10px;
+        background-color: black; color: white; font: 14.0px 'Courier New';
+        list-style-type: none;
+        counter-reset: sig-lines;
+        margin-left: 0px;
+      }
+      ol.p1 li { position: relative; margin-bottom: 2px; }
+      ol.p1 li.sig:before {
+        content: counter(sig-lines);
+        counter-increment: sig-lines;
+        position: absolute;
+        left: -35px;
+        background-color: black;
+        border-radius: 50%;
+        padding: 5px;
+        top: -2px;
+        font-size: 12px;
+        display: inline-block;
+        width: 12px; height: 12px;
+        text-align: center;
+      }
+      span.s1 {color: #33bd26}
+      span.s2 {font: 14.0px Menlo; color: #33bd26}
+      span.s3 {color: #2de71f}
+      span.s4 {color: #afae24}
+      span.s5 {color: #c33720}
+      span.s6 {color: #edec15}
+      span.f {white-space: pre-wrap;}
+    </style>
+    <ol class="p1">
+    <li>$ track0 https://github.com/jay/wget/ @follow +requisite +original-domain @save "+size&lt;100k”</li>
+    <li class="sig"><span class="s2 f"> ⚑ </span> <b>https://github.com/jay/wget/</b> <b>+162</b>/170 <span class="s3">@+size&lt;100k</span></li>
+    <li class="sig"><span class="s2 f"> ⚑ </span> <b>https://github.com/opensearch.xml</b> <span class="s3">@+original-domain @+size&lt;100k</span></li>
+    <li class="sig"><span class="s1 f">304</span> <b>https://github.com/apple-touch-icon-144.png</b> <span class="s3">@+original-domain</span></li>
+    <li class="sig"><span class="s4 f"> - </span> https://github-media-downloads.s3.amazonaws.com/github-logo.svg</li>
+    <li><span class="s4 f"> - </span> https://github.global.ssl.fastly.net/</li>
+    <li><span class="s4 f"> - </span> https://ghconduit.com:25035/</li>
+    <li class="sig"><span class="s5 f">404 [Not Found] https://github.com/_sockets </span><span class="s3">@+original-domain</span></li>
+    <li><span class="s2 f"> ⚑ </span> <b>https://github.global.ssl.fastly.net/assets/github-9b546507dc975fac304850c6b7b906a4b5889df9.css</b> <b>+33</b>/33 <span class="s3">@+requisite @+size&lt;100k</span></li>
+    <li class="sig"><span class="s1 f"> → </span> https://github.com/features <span class="s3">@+original-domain</span></li>
+    <li><span class="s2 f"> ⚑ </span> <b>https://github.com/features/projects</b> <b>+57</b>/77 <span class="s3">@+original-domain @+size&lt;100k</span></li>
+    <li class="sig"><span class="s1 f"> → </span> https://github.com/jay/wget/archive/master.zip <span class="s3">@+original-domain</span></li>
+    <li><span class="s4 f"> - </span> https://codeload.github.com/jay/wget/zip/master</li>
+    <li class="sig"><span class="s1 f"> + </span> <span class="s6">https://github.com/jay/wget/commits/master </span><b>+240</b>/280 <span class="s3">@+original-domain</span></li>
+    <li>  [2059 queued, 43 files saved]</li>
+    </ol>
+
+
+1. The url was saved (⚑, bold text).
+   It contains 170 links, 162 of which where added to the queue. The
+   missing links were unsupported types like ftp urls, or often
+   ``javascript:`` links.
+   Since it was a starting url provided by the user, it did not need to
+   pass any tests to be followed, and it was saved because it matched
+   the size test (``@+size<100k``).
+
+2. This url was followed because it matched the ``+original-domain`` test,
+   and it was saved because it matched the save rule (``@+size<100k``).
+   The first test listed is the determinant ``@follow`` rule, the second one
+   from the determinant ``@save`` rule. If you have not specified a
+   ``@save`` rule, it will not be given.
+
+3. The ``304`` indicates that this file already exists in the local mirror,
+   and the server informed us that it has not changed. It was not downloaded
+   again.
+
+4. The following three urls were skipped (-), because no ``@follow`` rule
+   matched. They were neither recognized as page requisites, nor are they
+   on the same domain as the starting url.
+
+5. The url could not be downloaded. In this case, the server returned a
+   ``404 Not Found`` status.
+
+6. This is an example of a redirect (→). Both the redirect itself and the
+   target url pass the ``@follow`` rule, and the file is saved.
+
+7. This is another redirect, except in this case, you can see that the
+   second url has not been followed
+
+8. This url was followed (+). However, it did not pass the ``@save``
+   rules. The line is missing the save indicator (⚑, bold text), and
+   is instead colored yellow. You can see that despite not being saved,
+   it contains 240 links that will be followed.
+
 Other recipes
 -------------
 
