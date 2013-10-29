@@ -328,7 +328,7 @@ class TestImpl(object):
             raise Redirect()
         length = safe_int(response.headers.get('content-length', None))
         if length is None:
-            response = link.resolve('full')
+            response = link.resolve(ctx['spider'], 'full')
             if not response:
                 return None
             length = safe_int(response.headers.get('content-length', None))
