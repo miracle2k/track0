@@ -124,6 +124,8 @@ class CLIRules(DefaultRules):
 
     # This is the default of a rule pipeline. This is different
     # from the default the CLI might use if no rules are given.
+    # It is False (= no match), because most filters are designed
+    # for that case.
     rule_default = False
 
     def __init__(self, arguments):

@@ -1,3 +1,16 @@
+Support conditions in rules. The system as is already allows quite a bit
+of expressiveness, but often, it feels much more natural to use and AND
+construct. For example, +(url=foo AND size>10) vs +url=foo -size<=10.
+An alternative or additional syntax I was considering was something along
+the lines of ``?(domain=pics.krawall.de +depth=0 +path=foo)``, i.e. only apply
+the depth and path tests for urls on this particular domain. But is that
+really necessary on top of AND conditions?
+
+Currently, if a file is determined to already exist in the mirror (via 304,
+or when disabling modified checks), the @save rules are not applied. That is,
+working with an existing dataset, using a different @save rule along with
+--enable-delete will not get you these files deleted. This should be changed.
+
 Support customizing referer behaviour.
 
 When say a link tag defines a file as text/css, we could use this to save
