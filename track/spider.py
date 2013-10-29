@@ -648,8 +648,12 @@ class Spider(object):
                 if self._add(link_url, previous=link, **opts):
                     num_links_followed += 1
 
-        self.events.bail_state_changed(
-            link, bail=False,
-            links_followed=num_links_followed, links_total=num_links_total)
+        # Publish bail state. Include the number of links only if we found
+        # some (say a http header link) or if this url was parsed for links
+        # (in other words, don't sent 0 link counts for images).
+        bail_extra = {}
+        if num_links_total or getattr(response, 'parsed', False):
+            bail_extra = dict(links_followed=num_links_followed, links_total=num_links_total)
+        self.events.bail_state_changed(link, bail=False, **bail_extra)
 
 
