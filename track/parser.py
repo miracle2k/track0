@@ -277,7 +277,7 @@ class HTMLTokenizer(Parser):
                 elif cur() in self.asciiLetters:
                     # http://dev.w3.org/html5/spec-LC/tokenization.html#tag-name-state
                     yield p.switch_element()
-                    tag_name = p.skip_until('\t\r\n />')
+                    tag_name = p.skip_until('\t\r\n />').lower()
                     yield p.switch_element(type='tag-open', name=tag_name)
                     tag_attrs = {}
 
@@ -290,7 +290,7 @@ class HTMLTokenizer(Parser):
 
                         # http://dev.w3.org/html5/spec-LC/tokenization.html#attribute-name-state
                         yield p.switch_element()
-                        attr_name = p.skip_until('\t\r\n />=')
+                        attr_name = p.skip_until('\t\r\n />=').lower()
                         if not attr_name:
                             next()
                             continue
